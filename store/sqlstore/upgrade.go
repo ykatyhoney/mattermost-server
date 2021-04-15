@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	CurrentSchemaVersion   = Version5340
+	CurrentSchemaVersion   = Version5350
 	Version5350            = "5.35.0"
 	Version5340            = "5.34.0"
 	Version5330            = "5.33.0"
@@ -1115,6 +1115,6 @@ func upgradeDatabaseToVersion535(sqlStore *SqlStore) {
 		mlog.Error("Error updating ChannelMembers table", mlog.Err(err))
 	}
 
-	// 	saveSchemaVersion(sqlStore, Version5350)
+	saveSchemaVersion(sqlStore, Version5350)
 	// }
 }
