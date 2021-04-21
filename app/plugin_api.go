@@ -312,13 +312,8 @@ func (api *PluginAPI) UpdateUserStatus(userID, status string) (*model.Status, *m
 	return api.app.GetStatus(userID)
 }
 
-func (api *PluginAPI) UpdateUserCustomStatus(userID, emoji, customStatus string) *model.AppError {
-	custom := &model.CustomStatus{
-		Emoji: emoji,
-		Text:  customStatus,
-	}
-
-	return api.app.SetCustomStatus(userID, custom)
+func (api *PluginAPI) UpdateUserCustomStatus(userID string, customStatus *model.CustomStatus) *model.AppError {
+	return api.app.SetCustomStatus(userID, customStatus)
 }
 
 func (api *PluginAPI) RemoveUserCustomStatus(userID string) *model.AppError {
