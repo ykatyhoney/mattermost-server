@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/rpc"
 	"net/url"
 	"os"
 	"os/exec"
@@ -202,6 +203,8 @@ type Server struct {
 	featureFlagStop              chan struct{}
 	featureFlagStopped           chan struct{}
 	featureFlagSynchronizerMutex sync.Mutex
+
+	suiteListener net.Listener
 }
 
 func NewServer(options ...Option) (*Server, error) {
@@ -637,6 +640,22 @@ func NewServer(options ...Option) (*Server, error) {
 		}()
 	}
 
+	suiteL, err := serverListener()
+	if err != nil {
+		return nil, err
+	}
+
+	mlog.Info("suite address----------", mlog.String("address", suiteL.Addr().String()))
+	_, suitePort, err := net.SplitHostPort(suiteL.Addr().String())
+	if err == nil {
+		mlog.Info("suite port", mlog.String("port", suitePort))
+	}
+	s.suiteListener = suiteL
+
+	suiteSrv := rpc.NewServer()
+	suiteSrv.Register(&MyStruct{s})
+	go suiteSrv.Accept(s.suiteListener)
+
 	return s, nil
 }
 
@@ -933,6 +952,8 @@ func (s *Server) Shutdown() {
 			mlog.Error("Error shutting down intercluster services", mlog.Err(err))
 		}
 	}
+
+	s.suiteListener.Close()
 
 	s.StopHTTPServer()
 	s.stopLocalModeServer()

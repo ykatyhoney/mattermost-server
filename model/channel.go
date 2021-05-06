@@ -56,6 +56,10 @@ type Channel struct {
 	PolicyID          *string                `json:"policy_id" db:"-"`
 }
 
+type GetChannelRPCResponse struct {
+	Channel *Channel
+}
+
 type ChannelWithTeamData struct {
 	Channel
 	TeamDisplayName string `json:"team_display_name"`
