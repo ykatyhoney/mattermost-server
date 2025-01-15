@@ -6,8 +6,8 @@ package sqlstore
 import (
 	sq "github.com/mattermost/squirrel"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 type SqlPostPriorityStore struct {
@@ -27,7 +27,7 @@ func (s *SqlPostPriorityStore) GetForPost(postId string) (*model.PostPriority, e
 		Where(sq.Eq{"PostId": postId})
 
 	var postPriority model.PostPriority
-	err := s.GetReplicaX().GetBuilder(&postPriority, query)
+	err := s.GetReplica().GetBuilder(&postPriority, query)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *SqlPostPriorityStore) GetForPosts(postIds []string) ([]*model.PostPrior
 			Where(sq.Eq{"PostId": postIds[i:j]})
 
 		var priorityBatch []*model.PostPriority
-		err := s.GetReplicaX().SelectBuilder(&priority, query)
+		err := s.GetReplica().SelectBuilder(&priority, query)
 
 		if err != nil {
 			return nil, err

@@ -1,18 +1,20 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Channel, ChannelMembership} from '@mattermost/types/channels';
-import {Group} from '@mattermost/types/groups';
-import {Team, TeamMembership} from '@mattermost/types/teams';
-import {PreferencesType} from '@mattermost/types/preferences';
-import {UserProfile} from '@mattermost/types/users';
-import {GlobalState} from '@mattermost/types/store';
+import type {Channel, ChannelMembership} from '@mattermost/types/channels';
+import type {Group} from '@mattermost/types/groups';
+import type {PreferencesType} from '@mattermost/types/preferences';
+import type {GlobalState} from '@mattermost/types/store';
+import type {Team, TeamMembership} from '@mattermost/types/teams';
+import type {UserProfile} from '@mattermost/types/users';
 
 import {General, Preferences} from 'mattermost-redux/constants';
+import * as Selectors from 'mattermost-redux/selectors/entities/users';
 import deepFreezeAndThrowOnMutation from 'mattermost-redux/utils/deep_freeze';
 import {sortByUsername} from 'mattermost-redux/utils/user_utils';
+
 import TestHelper from '../../../test/test_helper';
-import * as Selectors from 'mattermost-redux/selectors/entities/users';
+
 const searchProfilesMatchingWithTerm = Selectors.makeSearchProfilesMatchingWithTerm();
 const searchProfilesStartingWithTerm = Selectors.makeSearchProfilesStartingWithTerm();
 
@@ -26,6 +28,7 @@ describe('Selectors.Users', () => {
     const group2 = TestHelper.fakeGroupWithId('');
 
     const user1 = TestHelper.fakeUserWithId('');
+    user1.position = 'Software Engineer at Mattermost';
     user1.notify_props = {mention_keys: 'testkey1,testkey2'} as UserProfile['notify_props'];
     user1.roles = 'system_admin system_user';
     const user2 = TestHelper.fakeUserWithId();
@@ -290,10 +293,87 @@ describe('Selectors.Users', () => {
         });
     });
 
-    it('getProfilesInCurrentTeam', () => {
-        const users = [user1, user2, user7].sort(sortByUsername);
-        expect(Selectors.getProfilesInCurrentTeam(testState)).toEqual(users);
+    describe('getProfilesInCurrentTeam', () => {
+        it('getProfilesInCurrentTeam', () => {
+            const users = [user1, user2, user7].sort(sortByUsername);
+            expect(Selectors.getProfilesInCurrentTeam(testState)).toEqual(users);
+        });
+
+        const remoteUser = TestHelper.fakeUserWithId();
+        remoteUser.remote_id = 'remoteID';
+        const state = {
+            ...testState,
+            entities: {
+                ...testState.entities,
+                users: {
+                    ...testState.entities.users,
+                    profiles: {
+                        ...testState.entities.users.profiles,
+                        [remoteUser.id]: remoteUser,
+                    },
+                    profilesInTeam: {
+                        ...testState.entities.users.profilesInTeam,
+                        [team1.id]: new Set([...testState.entities.users.profilesInTeam[team1.id], remoteUser.id]),
+                    },
+                },
+                teams: {
+                    ...testState.teams,
+                    currentTeamId: team1.id,
+                    membersInTeam,
+                },
+            },
+        };
+
+        it('getProfilesInCurrentTeam include remote', () => {
+            const users = [user1, user2, user7, remoteUser].sort(sortByUsername);
+            expect(Selectors.getProfilesInCurrentTeam(state)).toEqual(users);
+        });
+
+        it('getProfilesInCurrentTeam with remote filter', () => {
+            const users = [user1, user2, user7].sort(sortByUsername);
+            const filters = {exclude_remote: true};
+            expect(Selectors.getProfilesInCurrentTeam(state, filters)).toEqual(users);
+        });
     });
+
+    describe('getProfilesNotInCurrentChannel', () => {
+        it('getProfilesNotInCurrentChannel', () => {
+            const users = [user2, user3].sort(sortByUsername);
+            expect(Selectors.getProfilesNotInCurrentChannel(testState)).toEqual(users);
+        });
+
+        const remoteUser = TestHelper.fakeUserWithId();
+        remoteUser.remote_id = 'remoteID';
+        const state = {
+            ...testState,
+            entities: {
+                ...testState.entities,
+                users: {
+                    ...testState.entities.users,
+                    profiles: {
+                        ...testState.entities.users.profiles,
+                        [remoteUser.id]: remoteUser,
+                    },
+                    profilesNotInChannel: {
+                        ...testState.entities.users.profilesNotInChannel,
+                        [channel1.id]: new Set([...testState.entities.users.profilesNotInChannel[channel1.id], remoteUser.id]),
+                    },
+                },
+            },
+        };
+
+        it('getProfilesNotInCurrentChannel include remote', () => {
+            const users = [user2, user3, remoteUser].sort(sortByUsername);
+            expect(Selectors.getProfilesNotInCurrentChannel(state)).toEqual(users);
+        });
+
+        it('getProfilesNotInCurrentChannel with remote filter', () => {
+            const users = [user2, user3].sort(sortByUsername);
+            const filters = {exclude_remote: true};
+            expect(Selectors.getProfilesNotInCurrentChannel(state, filters)).toEqual(users);
+        });
+    });
+
     describe('getProfilesInTeam', () => {
         it('getProfilesInTeam without filter', () => {
             const users = [user1, user2, user7].sort(sortByUsername);
@@ -400,6 +480,7 @@ describe('Selectors.Users', () => {
 
     it('searchProfilesInCurrentChannel', () => {
         expect(Selectors.searchProfilesInCurrentChannel(testState, user1.username)).toEqual([user1]);
+        expect(Selectors.searchProfilesInCurrentChannel(testState, 'engineer at mattermost')).toEqual([user1]);
         expect(Selectors.searchProfilesInCurrentChannel(testState, user1.username, true)).toEqual([]);
     });
 
@@ -815,6 +896,72 @@ describe('Selectors.Users', () => {
                 },
             };
             expect(Selectors.currentUserHasAnAdminRole(state)).toEqual(false);
+        });
+    });
+
+    describe('filterProfiles', () => {
+        it('no filter, return all users', () => {
+            expect(Object.keys(Selectors.filterProfiles(profiles)).length).toEqual(7);
+        });
+
+        it('filter role', () => {
+            const filter = {
+                role: 'system_admin',
+            };
+            expect(Object.keys(Selectors.filterProfiles(profiles, filter)).length).toEqual(3);
+        });
+
+        it('filter roles', () => {
+            const filter = {
+                roles: ['system_admin'],
+                team_roles: ['team_admin'],
+            };
+
+            const membership = TestHelper.fakeTeamMember(user3.id, team1.id);
+            membership.scheme_admin = true;
+            const memberships = {[user3.id]: membership};
+
+            expect(Object.keys(Selectors.filterProfiles(profiles, filter, memberships)).length).toEqual(4);
+        });
+
+        it('exclude_roles', () => {
+            const filter = {
+                exclude_roles: ['system_admin'],
+            };
+            expect(Object.keys(Selectors.filterProfiles(profiles, filter)).length).toEqual(4);
+        });
+
+        it('exclude bots', () => {
+            const filter = {
+                exclude_bots: true,
+            };
+            const botUser = {
+                ...user1,
+                id: 'test_bot_id',
+                username: 'botusername',
+                first_name: '',
+                last_name: '',
+                is_bot: true,
+            };
+            const newProfiles = {
+                ...profiles,
+                [botUser.id]: botUser,
+            };
+            expect(Object.keys(Selectors.filterProfiles(newProfiles, filter)).length).toEqual(7);
+        });
+
+        it('filter inactive', () => {
+            const filter = {
+                inactive: true,
+            };
+            expect(Object.keys(Selectors.filterProfiles(profiles, filter)).length).toEqual(2);
+        });
+
+        it('filter active', () => {
+            const filter = {
+                active: true,
+            };
+            expect(Object.keys(Selectors.filterProfiles(profiles, filter)).length).toEqual(5);
         });
     });
 });

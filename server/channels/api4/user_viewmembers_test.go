@@ -4,11 +4,12 @@
 package api4
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestAPIRestrictedViewMembers(t *testing.T) {
@@ -60,7 +61,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 	th.App.SetStatusOnline(user4.Id, true)
 	th.App.SetStatusOnline(user5.Id, true)
 
-	_, _, err := th.Client.Login(user1.Username, "test-password-1")
+	_, _, err := th.Client.Login(context.Background(), user1.Username, "test-password-1")
 	require.NoError(t, err)
 
 	t.Run("getUser", func(t *testing.T) {
@@ -119,7 +120,8 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 				"api.context.permissions.app_error",
 			},
 		}
-		defer th.RestoreDefaultRolePermissions(th.SaveDefaultRolePermissions())
+		defaultPerms := th.SaveDefaultRolePermissions()
+		defer th.RestoreDefaultRolePermissions(defaultPerms)
 
 		for _, tc := range testCases {
 			t.Run(tc.Name, func(t *testing.T) {
@@ -134,7 +136,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 					th.AddPermissionToRole(model.PermissionViewMembers.Id, model.SystemUserRoleId)
 				}
 
-				_, _, err := th.Client.GetUser(tc.UserId, "")
+				_, _, err := th.Client.GetUser(context.Background(), tc.UserId, "")
 				if tc.ExpectedError != "" {
 					CheckErrorID(t, err, tc.ExpectedError)
 				} else {
@@ -160,13 +162,13 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 			{
 				"Get not existing user without restrictions",
 				"",
-				model.NewId(),
+				model.NewUsername(),
 				"app.user.get_by_username.app_error",
 			},
 			{
 				"Get not existing user with restrictions to teams",
 				"teams",
-				model.NewId(),
+				model.NewUsername(),
 				"api.context.permissions.app_error",
 			},
 			{
@@ -184,7 +186,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 			{
 				"Get not existing user with restrictions to channels",
 				"channels",
-				model.NewId(),
+				model.NewUsername(),
 				"api.context.permissions.app_error",
 			},
 			{
@@ -200,7 +202,8 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 				"api.context.permissions.app_error",
 			},
 		}
-		defer th.RestoreDefaultRolePermissions(th.SaveDefaultRolePermissions())
+		defaultPerms := th.SaveDefaultRolePermissions()
+		defer th.RestoreDefaultRolePermissions(defaultPerms)
 
 		for _, tc := range testCases {
 			t.Run(tc.Name, func(t *testing.T) {
@@ -215,7 +218,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 					th.AddPermissionToRole(model.PermissionViewMembers.Id, model.SystemUserRoleId)
 				}
 
-				_, _, err := th.Client.GetUserByUsername(tc.Username, "")
+				_, _, err := th.Client.GetUserByUsername(context.Background(), tc.Username, "")
 				if tc.ExpectedError != "" {
 					CheckErrorID(t, err, tc.ExpectedError)
 				} else {
@@ -281,7 +284,8 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 				"api.context.permissions.app_error",
 			},
 		}
-		defer th.RestoreDefaultRolePermissions(th.SaveDefaultRolePermissions())
+		defaultPerms := th.SaveDefaultRolePermissions()
+		defer th.RestoreDefaultRolePermissions(defaultPerms)
 
 		for _, tc := range testCases {
 			t.Run(tc.Name, func(t *testing.T) {
@@ -296,7 +300,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 					th.AddPermissionToRole(model.PermissionViewMembers.Id, model.SystemUserRoleId)
 				}
 
-				_, _, err := th.Client.GetUserByEmail(tc.Email, "")
+				_, _, err := th.Client.GetUserByEmail(context.Background(), tc.Email, "")
 				if tc.ExpectedError != "" {
 					CheckErrorID(t, err, tc.ExpectedError)
 				} else {
@@ -362,7 +366,8 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 				"api.context.permissions.app_error",
 			},
 		}
-		defer th.RestoreDefaultRolePermissions(th.SaveDefaultRolePermissions())
+		defaultPerms := th.SaveDefaultRolePermissions()
+		defer th.RestoreDefaultRolePermissions(defaultPerms)
 
 		for _, tc := range testCases {
 			t.Run(tc.Name, func(t *testing.T) {
@@ -377,7 +382,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 					th.AddPermissionToRole(model.PermissionViewMembers.Id, model.SystemUserRoleId)
 				}
 
-				_, _, err := th.Client.GetDefaultProfileImage(tc.UserId)
+				_, _, err := th.Client.GetDefaultProfileImage(context.Background(), tc.UserId)
 				if tc.ExpectedError != "" {
 					CheckErrorID(t, err, tc.ExpectedError)
 				} else {
@@ -443,7 +448,8 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 				"api.context.permissions.app_error",
 			},
 		}
-		defer th.RestoreDefaultRolePermissions(th.SaveDefaultRolePermissions())
+		defaultPerms := th.SaveDefaultRolePermissions()
+		defer th.RestoreDefaultRolePermissions(defaultPerms)
 
 		for _, tc := range testCases {
 			t.Run(tc.Name, func(t *testing.T) {
@@ -458,7 +464,7 @@ func TestAPIRestrictedViewMembers(t *testing.T) {
 					th.AddPermissionToRole(model.PermissionViewMembers.Id, model.SystemUserRoleId)
 				}
 
-				_, _, err := th.Client.GetProfileImage(tc.UserId, "")
+				_, _, err := th.Client.GetProfileImage(context.Background(), tc.UserId, "")
 				if tc.ExpectedError != "" {
 					CheckErrorID(t, err, tc.ExpectedError)
 				} else {

@@ -1,8 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import classNames from 'classnames';
+import React from 'react';
 
 import './menu_item.scss';
 
@@ -34,7 +34,7 @@ export default function menuItem(Component: React.ComponentType<any>) {
                 textProp = (
                     <>
                         <span className='icon'>{icon}</span>
-                        {text}
+                        <div className='text'>{text}</div>
                     </>
                 );
             }
@@ -50,6 +50,7 @@ export default function menuItem(Component: React.ComponentType<any>) {
                     <Component
                         text={textProp}
                         ariaLabel={text?.toString()}
+                        id={id + '-button'}
                         {...props}
                     />
                 </li>

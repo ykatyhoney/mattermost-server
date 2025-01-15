@@ -4,10 +4,11 @@
 import React from 'react';
 import {Button, Modal} from 'react-bootstrap';
 import {useIntl} from 'react-intl';
+
 import AirgappedTrialActivationConfirmSvg from 'components/common/svg_images_components/airgapped_trial_activation_confirm_svg';
+import ExternalLink from 'components/external_link';
 
 import './air_gapped_modal.scss';
-import ExternalLink from 'components/external_link';
 
 type Props = {
     onClose?: () => void;
@@ -29,7 +30,7 @@ function AirGappedModal({onClose}: Props) {
             dialogClassName={'AirGappedModal__dialog'}
             show={true}
             id='airGappedModal'
-            role='dialog'
+            role='none'
             onHide={() => onClose?.()}
         >
             <Modal.Header closeButton={true}>

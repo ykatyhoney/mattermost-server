@@ -4,6 +4,7 @@
 package manualtesting
 
 import (
+	"context"
 	"errors"
 	"hash/fnv"
 	"math/rand"
@@ -12,14 +13,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/api4"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/slashcommands"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/channels/web"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/app/slashcommands"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
+	"github.com/mattermost/mattermost/server/v8/channels/web"
 )
 
 // TestEnvironment is a helper struct used for tests in manualtesting.
@@ -33,14 +33,9 @@ type TestEnvironment struct {
 	Request       *http.Request
 }
 
-// Init adds manualtest endpoint to the API.
-func Init(api4 *api4.API) {
-	api4.BaseRoutes.Root.Handle("/manualtest", api4.APIHandler(manualTest)).Methods("GET")
-}
-
-func manualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
+func ManualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
 	// Let the world know
-	mlog.Info("Setting up for manual test...")
+	c.Logger.Info("Setting up for manual test...")
 
 	// URL Parameters
 	params, err := url.ParseQuery(r.URL.RawQuery)
@@ -57,7 +52,7 @@ func manualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
 		hash := hasher.Sum32()
 		rand.Seed(int64(hash))
 	} else {
-		mlog.Debug("No uid in URL")
+		c.Logger.Debug("No uid in URL")
 	}
 
 	// Create a client for tests to use
@@ -69,7 +64,7 @@ func manualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
 	var teamID string
 	var userID string
 	if ok1 && ok2 {
-		mlog.Info("Creating user and team")
+		c.Logger.Info("Creating user and team")
 		// Create team for testing
 		team := &model.Team{
 			DisplayName: teamDisplayName[0],
@@ -107,7 +102,7 @@ func manualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
 			Nickname: username[0],
 			Password: slashcommands.UserPassword}
 
-		user, _, err = client.CreateUser(user)
+		user, _, err = client.CreateUser(context.Background(), user)
 		if err != nil {
 			var appErr *model.AppError
 			ok = errors.As(err, &appErr)
@@ -121,12 +116,12 @@ func manualTest(c *web.Context, w http.ResponseWriter, r *http.Request) {
 		}
 
 		c.App.Srv().Store().User().VerifyEmail(user.Id, user.Email)
-		c.App.Srv().Store().Team().SaveMember(&model.TeamMember{TeamId: teamID, UserId: user.Id}, *c.App.Config().TeamSettings.MaxUsersPerTeam)
+		c.App.Srv().Store().Team().SaveMember(c.AppContext, &model.TeamMember{TeamId: teamID, UserId: user.Id}, *c.App.Config().TeamSettings.MaxUsersPerTeam)
 
 		userID = user.Id
 
 		// Login as user to generate auth token
-		_, _, err = client.LoginById(user.Id, slashcommands.UserPassword)
+		_, _, err = client.LoginById(context.Background(), user.Id, slashcommands.UserPassword)
 		if err != nil {
 			var appErr *model.AppError
 			ok = errors.As(err, &appErr)

@@ -2,17 +2,16 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-
 import {FormattedMessage} from 'react-intl';
 
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
+import {InformationOutlineIcon} from '@mattermost/compass-icons/components';
 
+import ExternalLink from 'components/external_link';
+import type {Notice} from 'components/system_notice/types';
+
+import {DocLinks} from 'utils/constants';
 import * as ServerVersion from 'utils/server_version';
 import * as UserAgent from 'utils/user_agent';
-
-import mattermostIcon from 'images/icon50x50.png';
-import {Notice} from 'components/system_notice/types';
-import ExternalLink from 'components/external_link';
 
 // Notices are objects with the following fields:
 //  - name - string identifier
@@ -30,12 +29,11 @@ const notices: Notice[] = [
         name: 'apiv3_deprecation',
         adminOnly: true,
         title: (
-            <FormattedMarkdownMessage
+            <FormattedMessage
                 id='system_notice.title'
-                defaultMessage='**Notice**\nfrom Mattermost'
+                defaultMessage='Notice from Mattermost'
             />
         ),
-        icon: mattermostIcon,
         body: (
             <FormattedMessage
                 id='system_notice.body.api3'
@@ -64,12 +62,11 @@ const notices: Notice[] = [
         name: 'advanced_permissions',
         adminOnly: true,
         title: (
-            <FormattedMarkdownMessage
+            <FormattedMessage
                 id='system_notice.title'
-                defaultMessage='**Notice**\nfrom Mattermost'
+                defaultMessage='Notice from Mattermost'
             />
         ),
-        icon: mattermostIcon,
         body: (
             <FormattedMessage
                 id='system_notice.body.permissions'
@@ -77,7 +74,7 @@ const notices: Notice[] = [
                 values={{
                     link: (msg: React.ReactNode) => (
                         <ExternalLink
-                            href='https://docs.mattermost.com/deployment/advanced-permissions.html'
+                            href={DocLinks.ONBOARD_ADVANCED_PERMISSIONS}
                             location='system_notices'
                         >
                             {msg}
@@ -104,12 +101,11 @@ const notices: Notice[] = [
         name: 'ee_upgrade_advice',
         adminOnly: true,
         title: (
-            <FormattedMarkdownMessage
+            <FormattedMessage
                 id='system_notice.title'
-                defaultMessage='**Notice**\nfrom Mattermost'
+                defaultMessage='Notice from Mattermost'
             />
         ),
-        icon: mattermostIcon,
         body: (
             <FormattedMessage
                 id='system_notice.body.ee_upgrade_advice'
@@ -131,11 +127,11 @@ const notices: Notice[] = [
             const USERS_THRESHOLD = 10000;
 
             // If we don't have the analytics yet, don't show
-            if (!analytics?.hasOwnProperty('TOTAL_USERS')) {
+            if (!analytics || Object.hasOwn(analytics, 'TOTAL_USERS')) {
                 return false;
             }
 
-            if (analytics.TOTAL_USERS < USERS_THRESHOLD) {
+            if (analytics.TOTAL_USERS && analytics.TOTAL_USERS < USERS_THRESHOLD) {
                 return false;
             }
 
@@ -149,12 +145,11 @@ const notices: Notice[] = [
     {
         name: 'ie11_deprecation',
         title: (
-            <FormattedMarkdownMessage
+            <FormattedMessage
                 id='system_notice.title'
-                defaultMessage='**Notice**\nfrom Mattermost'
+                defaultMessage='Notice from Mattermost'
             />
         ),
-        icon: mattermostIcon,
         allowForget: false,
         body: (
             <FormattedMessage
@@ -184,6 +179,30 @@ const notices: Notice[] = [
             }
 
             return true;
+        },
+    },
+    {
+
+        // This notice is marked as viewed by default for new users on the server.
+        // Any change on this notice should be handled also in the server side.
+        name: 'GMasDM',
+        allowForget: true,
+        title: (
+            <FormattedMessage
+                id='system_notice.title.gm_as_dm'
+                defaultMessage='Updates to Group Messages'
+            />
+        ),
+        icon: (<InformationOutlineIcon/>),
+        body: (
+            <FormattedMessage
+                id='system_noticy.body.gm_as_dm'
+                defaultMessage='You will now be notified for all activity in your group messages along with a notification badge for every new message.{br}{br}You can configure this in notification preferences for each group message.'
+                values={{br: (<br/>)}}
+            />
+        ),
+        show: (serverVersion, config, license, analytics, currentChannel) => {
+            return currentChannel?.type === 'G';
         },
     },
 ];

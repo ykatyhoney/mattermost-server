@@ -4,6 +4,7 @@
 package slashcommands
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,12 +15,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/i18n"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/i18n"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
 )
 
 var usage = `Mattermost testing commands to help configure the system
@@ -194,7 +195,7 @@ func (lt *LoadTestProvider) doCommand(a *app.App, c request.CTX, args *model.Com
 	}
 
 	if strings.HasPrefix(message, "json") {
-		return lt.JsonCommand(a, c, args, message)
+		return lt.JSONCommand(a, c, args, message)
 	}
 
 	return lt.HelpCommand(args, message), nil
@@ -204,7 +205,7 @@ func (*LoadTestProvider) HelpCommand(args *model.CommandArgs, message string) *m
 	return &model.CommandResponse{Text: usage, ResponseType: model.CommandResponseTypeEphemeral}
 }
 
-func (*LoadTestProvider) SetupCommand(a *app.App, c request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
+func (*LoadTestProvider) SetupCommand(a *app.App, rctx request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
 	tokens := strings.Fields(strings.TrimPrefix(message, "setup"))
 	doTeams := contains(tokens, "teams")
 	doFuzz := contains(tokens, "fuzz")
@@ -245,16 +246,16 @@ func (*LoadTestProvider) SetupCommand(a *app.App, c request.CTX, args *model.Com
 	client := model.NewAPIv4Client(args.SiteURL)
 
 	if doTeams {
-		if err := CreateBasicUser(a, client); err != nil {
+		if err := CreateBasicUser(rctx, a, client); err != nil {
 			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-		_, _, err := client.Login(BTestUserEmail, BTestUserPassword)
+		_, _, err := client.Login(context.Background(), BTestUserEmail, BTestUserPassword)
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
 		environment, err := CreateTestEnvironmentWithTeams(
 			a,
-			c,
+			rctx,
 			client,
 			utils.Range{Begin: numTeams, End: numTeams},
 			utils.Range{Begin: numChannels, End: numChannels},
@@ -265,10 +266,10 @@ func (*LoadTestProvider) SetupCommand(a *app.App, c request.CTX, args *model.Com
 			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
 
-		c.Logger().Info("Testing environment created")
+		rctx.Logger().Info("Testing environment created")
 		for i := 0; i < len(environment.Teams); i++ {
-			c.Logger().Info("Team Created: " + environment.Teams[i].Name)
-			c.Logger().Info("\t User to login: " + environment.Environments[i].Users[0].Email + ", " + UserPassword)
+			rctx.Logger().Info("Team Created: " + environment.Teams[i].Name)
+			rctx.Logger().Info("\t User to login: " + environment.Environments[i].Users[0].Email + ", " + UserPassword)
 		}
 	} else {
 		team, err := a.Srv().Store().Team().Get(args.TeamId)
@@ -276,23 +277,26 @@ func (*LoadTestProvider) SetupCommand(a *app.App, c request.CTX, args *model.Com
 			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
 
-		CreateTestEnvironmentInTeam(
+		_, err = CreateTestEnvironmentInTeam(
 			a,
-			c,
+			rctx,
 			client,
 			team,
 			utils.Range{Begin: numChannels, End: numChannels},
 			utils.Range{Begin: numUsers, End: numUsers},
 			utils.Range{Begin: numPosts, End: numPosts},
 			doFuzz)
+		if err != nil {
+			return &model.CommandResponse{Text: "Failed to create testing environment", ResponseType: model.CommandResponseTypeEphemeral}, err
+		}
 	}
 
 	return &model.CommandResponse{Text: "Created environment", ResponseType: model.CommandResponseTypeEphemeral}, nil
 }
 
 func (*LoadTestProvider) ActivateUserCommand(a *app.App, c request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
-	user_id := strings.TrimSpace(strings.TrimPrefix(message, "activate_user"))
-	if err := a.UpdateUserActive(c, user_id, true); err != nil {
+	userID := strings.TrimSpace(strings.TrimPrefix(message, "activate_user"))
+	if err := a.UpdateUserActive(c, userID, true); err != nil {
 		return &model.CommandResponse{Text: "Failed to activate user", ResponseType: model.CommandResponseTypeEphemeral}, err
 	}
 
@@ -300,8 +304,8 @@ func (*LoadTestProvider) ActivateUserCommand(a *app.App, c request.CTX, args *mo
 }
 
 func (*LoadTestProvider) DeActivateUserCommand(a *app.App, c request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
-	user_id := strings.TrimSpace(strings.TrimPrefix(message, "deactivate_user"))
-	if err := a.UpdateUserActive(c, user_id, false); err != nil {
+	userID := strings.TrimSpace(strings.TrimPrefix(message, "deactivate_user"))
+	if err := a.UpdateUserActive(c, userID, false); err != nil {
 		return &model.CommandResponse{Text: "Failed to deactivate user", ResponseType: model.CommandResponseTypeEphemeral}, err
 	}
 
@@ -324,7 +328,6 @@ func (*LoadTestProvider) UsersCommand(a *app.App, c request.CTX, args *model.Com
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to add users: " + err.Error(), ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	team, err := a.Srv().Store().Team().Get(args.TeamId)
@@ -368,7 +371,6 @@ func (*LoadTestProvider) ChannelsCommand(a *app.App, c request.CTX, args *model.
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to add channels: " + err.Error(), ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	team, err := a.Srv().Store().Team().Get(args.TeamId)
@@ -426,7 +428,6 @@ func (*LoadTestProvider) DMsCommand(a *app.App, c request.CTX, args *model.Comma
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to add DMs: " + err.Error(), ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	time := int64(0)
@@ -464,7 +465,6 @@ func (*LoadTestProvider) ThreadedPostCommand(a *app.App, c request.CTX, args *mo
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to create post: " + err.Error(), ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	time := int64(0)
@@ -477,8 +477,9 @@ func (*LoadTestProvider) ThreadedPostCommand(a *app.App, c request.CTX, args *mo
 	}
 
 	var usernames []string
+	var profileUsers []*model.User
 	options := &model.UserGetOptions{InTeamId: args.TeamId, Page: 0, PerPage: 1000}
-	if profileUsers, err := a.Srv().Store().User().GetProfiles(options); err == nil {
+	if profileUsers, err = a.Srv().Store().User().GetProfiles(options); err == nil {
 		usernames = make([]string, len(profileUsers))
 		i := 0
 		for _, userprof := range profileUsers {
@@ -497,7 +498,10 @@ func (*LoadTestProvider) ThreadedPostCommand(a *app.App, c request.CTX, args *mo
 	}
 	numPosts := utils.RandIntFromRange(rng)
 	for i := 0; i < numPosts; i++ {
-		testPoster.CreateRandomPostNested(c, rpost.Id)
+		_, err = testPoster.CreateRandomPostNested(c, rpost.Id)
+		if err != nil {
+			return &model.CommandResponse{Text: "Failed to create nested post", ResponseType: model.CommandResponseTypeEphemeral}, err
+		}
 	}
 
 	return &model.CommandResponse{Text: "Added threaded post", ResponseType: model.CommandResponseTypeEphemeral}, nil
@@ -519,7 +523,6 @@ func (*LoadTestProvider) PostsCommand(a *app.App, c request.CTX, args *model.Com
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to add posts: " + err.Error(), ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	maxImages := 0
@@ -564,7 +567,6 @@ func (*LoadTestProvider) PostsCommand(a *app.App, c request.CTX, args *model.Com
 		if err != nil {
 			return &model.CommandResponse{Text: "Failed to add posts", ResponseType: model.CommandResponseTypeEphemeral}, err
 		}
-
 	}
 
 	return &model.CommandResponse{Text: "Added posts", ResponseType: model.CommandResponseTypeEphemeral}, nil
@@ -604,7 +606,7 @@ func (*LoadTestProvider) PostCommand(a *app.App, c request.CTX, args *model.Comm
 	}
 
 	client := model.NewAPIv4Client(args.SiteURL)
-	_, _, nErr := client.LoginById(user.Id, passwd)
+	_, _, nErr := client.LoginById(context.Background(), user.Id, passwd)
 	if nErr != nil {
 		return &model.CommandResponse{Text: "Failed to login a user", ResponseType: model.CommandResponseTypeEphemeral}, nErr
 	}
@@ -613,7 +615,7 @@ func (*LoadTestProvider) PostCommand(a *app.App, c request.CTX, args *model.Comm
 		ChannelId: channel.Id,
 		Message:   textMessage,
 	}
-	_, _, nErr = client.CreatePost(post)
+	_, _, nErr = client.CreatePost(context.Background(), post)
 	if nErr != nil {
 		return &model.CommandResponse{Text: "Failed to create a post", ResponseType: model.CommandResponseTypeEphemeral}, nErr
 	}
@@ -641,7 +643,10 @@ func (*LoadTestProvider) URLCommand(a *app.App, c request.CTX, args *model.Comma
 		return &model.CommandResponse{Text: "Unable to get file", ResponseType: model.CommandResponseTypeEphemeral}, err
 	}
 	defer func() {
-		io.Copy(io.Discard, r.Body)
+		_, err := io.Copy(io.Discard, r.Body)
+		if err != nil {
+			c.Logger().Warn("Error discarding request body", mlog.Err(err))
+		}
 		r.Body.Close()
 	}()
 
@@ -675,7 +680,7 @@ func (*LoadTestProvider) URLCommand(a *app.App, c request.CTX, args *model.Comma
 	return &model.CommandResponse{Text: "Loaded data", ResponseType: model.CommandResponseTypeEphemeral}, nil
 }
 
-func (*LoadTestProvider) JsonCommand(a *app.App, c request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
+func (*LoadTestProvider) JSONCommand(a *app.App, c request.CTX, args *model.CommandArgs, message string) (*model.CommandResponse, error) {
 	url := strings.TrimSpace(strings.TrimPrefix(message, "json"))
 	if url == "" {
 		return &model.CommandResponse{Text: "Command must contain a url", ResponseType: model.CommandResponseTypeEphemeral}, nil
@@ -699,7 +704,10 @@ func (*LoadTestProvider) JsonCommand(a *app.App, c request.CTX, args *model.Comm
 		return &model.CommandResponse{Text: "Unable to get file", ResponseType: model.CommandResponseTypeEphemeral}, errors.Errorf("unexpected status code %d", r.StatusCode)
 	}
 	defer func() {
-		io.Copy(io.Discard, r.Body)
+		_, err := io.Copy(io.Discard, r.Body)
+		if err != nil {
+			c.Logger().Warn("Error discarding request body", mlog.Err(err))
+		}
 		r.Body.Close()
 	}()
 

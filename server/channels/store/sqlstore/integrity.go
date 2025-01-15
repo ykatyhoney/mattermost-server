@@ -6,8 +6,8 @@ package sqlstore
 import (
 	sq "github.com/mattermost/squirrel"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
 type relationalCheckConfig struct {
@@ -57,7 +57,7 @@ func getOrphanedRecords(ss *SqlStore, cfg relationalCheckConfig) ([]model.Orphan
 		return nil, err
 	}
 
-	err = ss.GetMasterX().Select(&records, query, args...)
+	err = ss.GetMaster().Select(&records, query, args...)
 	return records, err
 }
 

@@ -1,8 +1,10 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
+
+import LoadingScreen from 'components/loading_screen';
 
 import {TestHelper} from 'utils/test_helper';
 
@@ -16,40 +18,55 @@ describe('components/admin_console/manage_tokens_modal/manage_tokens_modal.tsx',
         user: TestHelper.getUserMock({
             id: 'defaultuser',
         }),
-        show: false,
-        onModalDismissed: jest.fn(),
+        onHide: jest.fn(),
+        onExited: jest.fn(),
     };
 
-    test('should match snapshot', () => {
+    test('initial call should match snapshot', () => {
         const wrapper = shallow(
             <ManageTokensModal {...baseProps}/>,
         );
         expect(wrapper).toMatchSnapshot();
+        expect(baseProps.actions.getUserAccessTokensForUser).toHaveBeenCalledTimes(1);
+        expect(wrapper.find('.manage-teams__teams').exists()).toBe(true);
+        expect(wrapper.find(LoadingScreen).exists()).toBe(true);
     });
 
-    test('should not call getUserAccessTokensForUser on mount', () => {
+    test('should replace loading screen on update', () => {
         const wrapper = shallow(
             <ManageTokensModal {...baseProps}/>,
         );
-        expect(baseProps.actions.getUserAccessTokensForUser).toHaveBeenCalledTimes(0);
-        expect(wrapper.state('userAccessTokens')).toBeUndefined();
-    });
 
-    test('should call getUserAccessTokensForUser on user change', () => {
-        // create new user as only by then the update method triggers token retrieval
         const newProps = {
             ...baseProps,
-            user: TestHelper.getUserMock({
-                id: 'newuser',
-            }),
+            userAccessTokens: {},
         };
+        wrapper.setProps(newProps);
+        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.find('.manage-teams__teams').exists()).toBe(true);
+        expect(wrapper.find('.manage-row__empty').exists()).toBe(true);
+    });
+
+    test('should display list of tokens', () => {
         const wrapper = shallow(
             <ManageTokensModal {...baseProps}/>,
         );
+        const newProps = {
+            ...baseProps,
+            userAccessTokens: [
+                {
+                    id: 'id1',
+                    description: 'description',
+                },
+                {
+                    id: 'id2',
+                    description: 'description',
+                },
+            ],
+        };
         wrapper.setProps(newProps);
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        wrapper.instance().componentDidUpdate(baseProps, newProps);
-        expect(newProps.actions.getUserAccessTokensForUser).toHaveBeenCalledTimes(2);
+        expect(wrapper).toMatchSnapshot();
+        expect(wrapper.find('.manage-teams__teams').exists()).toBe(true);
+        expect(wrapper.find('.manage-teams__team').length).toBe(2);
     });
 });

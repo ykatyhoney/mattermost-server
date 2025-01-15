@@ -2,38 +2,38 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
+import {FormattedMessage, defineMessages} from 'react-intl';
 
-import {ClientLicense} from '@mattermost/types/config';
-import {ActionResult} from 'mattermost-redux/types/actions';
-import {StatusOK} from '@mattermost/types/client4';
+import type {StatusOK} from '@mattermost/types/client4';
+import type {ClientLicense} from '@mattermost/types/config';
+import type {ServerError} from '@mattermost/types/errors';
+import type {ServerLimits} from '@mattermost/types/limits';
+import type {GetFilteredUsersStatsOpts, UsersStats} from '@mattermost/types/users';
 
-import {isLicenseExpired, isLicenseExpiring, isTrialLicense, isEnterpriseOrE20License, licenseSKUWithFirstLetterCapitalized} from 'utils/license_utils';
+import type {ActionResult} from 'mattermost-redux/types/actions';
 
 import {trackEvent} from 'actions/telemetry_actions';
 
-import {GetFilteredUsersStatsOpts, UsersStats} from '@mattermost/types/users';
-import {ServerError} from '@mattermost/types/errors';
-
-import FormattedAdminHeader from 'components/widgets/admin_console/formatted_admin_header';
 import ExternalLink from 'components/external_link';
+import AdminHeader from 'components/widgets/admin_console/admin_header';
 
 import {AboutLinks, CloudLinks, ModalIdentifiers} from 'utils/constants';
+import {isLicenseExpired, isLicenseExpiring, isTrialLicense, isEnterpriseOrE20License, licenseSKUWithFirstLetterCapitalized} from 'utils/license_utils';
 
-import {ModalData} from 'types/actions';
+import type {ModalData} from 'types/actions';
 
-import RenewLinkCard from './renew_license_card/renew_license_card';
-import TrialLicenseCard from './trial_license_card/trial_license_card';
-
-import TeamEditionLeftPanel from './team_edition/team_edition_left_panel';
-import TeamEditionRightPanel from './team_edition/team_edition_right_panel';
-import StarterLeftPanel from './starter_edition/starter_left_panel';
-import StarterRightPanel from './starter_edition/starter_right_panel';
-import EnterpriseEditionLeftPanel from './enterprise_edition/enterprise_edition_left_panel';
+import EnterpriseEditionLeftPanel, {messages as enterpriseEditionLeftPanelMessages} from './enterprise_edition/enterprise_edition_left_panel';
 import EnterpriseEditionRightPanel from './enterprise_edition/enterprise_edition_right_panel';
-import TrialBanner from './trial_banner/trial_banner';
+import ConfirmLicenseRemovalModal from './modals/confirm_license_removal_modal';
 import EELicenseModal from './modals/ee_license_modal';
 import UploadLicenseModal from './modals/upload_license_modal';
-import ConfirmLicenseRemovalModal from './modals/confirm_license_removal_modal';
+import RenewLinkCard from './renew_license_card/renew_license_card';
+import StarterLeftPanel, {messages as licenseSettingsStarterEditionMessages} from './starter_edition/starter_left_panel';
+import StarterRightPanel from './starter_edition/starter_right_panel';
+import TeamEditionLeftPanel from './team_edition/team_edition_left_panel';
+import TeamEditionRightPanel from './team_edition/team_edition_right_panel';
+import TrialBanner from './trial_banner/trial_banner';
+import TrialLicenseCard from './trial_license_card/trial_license_card';
 
 import './license_settings.scss';
 
@@ -47,20 +47,31 @@ type Props = {
     actions: {
         getLicenseConfig: () => void;
         uploadLicense: (file: File) => Promise<ActionResult>;
-        removeLicense: () => Promise<ActionResult>;
+        removeLicense: () => Promise<ActionResult<boolean, ServerError>>;
         getPrevTrialLicense: () => void;
         upgradeToE0: () => Promise<StatusOK>;
-        upgradeToE0Status: () => Promise<{percentage: number; error: string | JSX.Element}>;
+        upgradeToE0Status: () => Promise<{percentage: number; error: string | JSX.Element | null}>;
         restartServer: () => Promise<StatusOK>;
         ping: () => Promise<{status: string}>;
         requestTrialLicense: (users: number, termsAccepted: boolean, receiveEmailsAccepted: boolean, featureName: string) => Promise<ActionResult>;
         openModal: <P>(modalData: ModalData<P>) => void;
+        getServerLimits: () => Promise<ActionResult<ServerLimits, ServerError>>;
         getFilteredUsersStats: (filters: GetFilteredUsersStatsOpts) => Promise<{
             data?: UsersStats;
             error?: ServerError;
         }>;
     };
 }
+
+const messages = defineMessages({
+    title: {id: 'admin.license.title', defaultMessage: 'Edition and License'},
+});
+
+export const searchableStrings = [
+    licenseSettingsStarterEditionMessages.key,
+    enterpriseEditionLeftPanelMessages.keyRemove,
+    messages.title,
+];
 
 type State = {
     fileSelected: boolean;
@@ -180,8 +191,13 @@ export default class LicenseSettings extends React.PureComponent<Props, State> {
             return;
         }
 
-        this.props.actions.getPrevTrialLicense();
-        await this.props.actions.getLicenseConfig();
+        await Promise.all([
+            this.props.actions.getPrevTrialLicense(),
+            this.props.actions.getLicenseConfig(),
+        ]);
+
+        await this.props.actions.getServerLimits();
+
         this.setState({serverError: null, removing: false});
     };
 
@@ -332,11 +348,9 @@ export default class LicenseSettings extends React.PureComponent<Props, State> {
 
         return (
             <div className='wrapper--fixed'>
-                <FormattedAdminHeader
-                    id='admin.license.title'
-                    defaultMessage='Edition and License'
-                />
-
+                <AdminHeader>
+                    <FormattedMessage {...messages.title}/>
+                </AdminHeader>
                 <div className='admin-console__wrapper'>
                     <div className='admin-console__content'>
                         <div className='admin-console__banner_section'>
@@ -380,8 +394,6 @@ export default class LicenseSettings extends React.PureComponent<Props, State> {
     }
 
     renewLicenseCard = () => {
-        const {isDisabled} = this.props;
-
         if (isTrialLicense(this.props.license)) {
             return (
                 <TrialLicenseCard
@@ -395,7 +407,6 @@ export default class LicenseSettings extends React.PureComponent<Props, State> {
                     license={this.props.license}
                     isLicenseExpired={isLicenseExpired(this.props.license)}
                     totalUsers={this.props.totalUsers}
-                    isDisabled={isDisabled}
                 />
             );
         }

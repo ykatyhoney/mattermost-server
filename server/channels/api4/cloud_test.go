@@ -4,6 +4,7 @@
 package api4
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"testing"
@@ -11,122 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/einterfaces/mocks"
 )
-
-func Test_getCloudLimits(t *testing.T) {
-	t.Run("no license returns not implemented", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		cloud := &mocks.CloudInterface{}
-		cloud.Mock.On("GetCloudLimits", mock.Anything).Return(nil, errors.New("Unable to get limits"))
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = cloud
-
-		th.App.Srv().RemoveLicense()
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		limits, r, err := th.Client.GetProductLimits()
-		require.Error(t, err)
-		require.Nil(t, limits)
-		require.Equal(t, http.StatusForbidden, r.StatusCode, "Expected 403 forbidden")
-	})
-
-	t.Run("non cloud license returns not implemented", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		cloud := &mocks.CloudInterface{}
-		cloud.Mock.On("GetCloudLimits", mock.Anything).Return(nil, errors.New("Unable to get limits"))
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = cloud
-
-		th.App.Srv().SetLicense(model.NewTestLicense())
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		limits, r, err := th.Client.GetProductLimits()
-		require.Error(t, err)
-		require.Nil(t, limits)
-		require.Equal(t, http.StatusForbidden, r.StatusCode, "Expected 403 forbidden")
-	})
-
-	t.Run("error fetching limits returns internal server error", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		cloud := &mocks.CloudInterface{}
-		cloud.Mock.On("GetCloudLimits", mock.Anything).Return(nil, errors.New("Unable to get limits"))
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = cloud
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		limits, r, err := th.Client.GetProductLimits()
-		require.Error(t, err)
-		require.Nil(t, limits)
-		require.Equal(t, http.StatusInternalServerError, r.StatusCode, "Expected 500 Internal Server Error")
-	})
-
-	t.Run("unauthenticated users can not access", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Logout()
-
-		limits, r, err := th.Client.GetProductLimits()
-		require.Error(t, err)
-		require.Nil(t, limits)
-		require.Equal(t, http.StatusUnauthorized, r.StatusCode, "Expected 401 Unauthorized")
-	})
-
-	t.Run("good request with cloud server", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		cloud := &mocks.CloudInterface{}
-		ten := 10
-		mockLimits := &model.ProductLimits{
-			Messages: &model.MessagesLimits{
-				History: &ten,
-			},
-		}
-		cloud.Mock.On("GetCloudLimits", mock.Anything).Return(mockLimits, nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = cloud
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		limits, r, err := th.Client.GetProductLimits()
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, r.StatusCode, "Expected 200 OK")
-		require.Equal(t, mockLimits, limits)
-		require.Equal(t, *mockLimits.Messages.History, *limits.Messages.History)
-	})
-}
 
 func Test_GetSubscription(t *testing.T) {
 	deliquencySince := int64(2000000000)
@@ -153,7 +41,7 @@ func Test_GetSubscription(t *testing.T) {
 		ProductID:       "SomeProductId",
 		AddOns:          []string{},
 		StartAt:         0,
-		EndAt:           0,
+		EndAt:           2000000000,
 		CreateAt:        0,
 		Seats:           0,
 		IsFreeTrial:     "true",
@@ -167,7 +55,7 @@ func Test_GetSubscription(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -181,7 +69,7 @@ func Test_GetSubscription(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		subscriptionReturned, r, err := th.Client.GetSubscription()
+		subscriptionReturned, r, err := th.Client.GetSubscription(context.Background())
 
 		require.NoError(t, err)
 		require.Equal(t, subscriptionReturned, userFacingSubscription)
@@ -192,7 +80,7 @@ func Test_GetSubscription(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -206,7 +94,7 @@ func Test_GetSubscription(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		subscriptionReturned, r, err := th.SystemAdminClient.GetSubscription()
+		subscriptionReturned, r, err := th.SystemAdminClient.GetSubscription(context.Background())
 
 		require.NoError(t, err)
 		require.Equal(t, subscriptionReturned, subscription)
@@ -214,126 +102,12 @@ func Test_GetSubscription(t *testing.T) {
 	})
 }
 
-func Test_requestTrial(t *testing.T) {
-	subscription := &model.Subscription{
-		ID:         "MySubscriptionID",
-		CustomerID: "MyCustomer",
-		ProductID:  "SomeProductId",
-		AddOns:     []string{},
-		StartAt:    1000000000,
-		EndAt:      2000000000,
-		CreateAt:   1000000000,
-		Seats:      10,
-		DNS:        "some.dns.server",
-	}
-
-	newValidBusinessEmail := model.StartCloudTrialRequest{Email: ""}
-
-	t.Run("NON Admin users are UNABLE to request the trial", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		cloud := mocks.CloudInterface{}
-
-		cloud.Mock.On("GetSubscription", mock.Anything).Return(subscription, nil)
-		cloud.Mock.On("RequestCloudTrial", mock.Anything, mock.Anything, "").Return(subscription, nil)
-		cloud.Mock.On("InvalidateCaches").Return(nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = &cloud
-
-		subscriptionChanged, r, err := th.Client.RequestCloudTrial(&newValidBusinessEmail)
-		require.Error(t, err)
-		require.Nil(t, subscriptionChanged)
-		require.Equal(t, http.StatusForbidden, r.StatusCode, "403 Forbidden")
-	})
-
-	t.Run("ADMIN user are ABLE to request the trial", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		cloud := mocks.CloudInterface{}
-
-		cloud.Mock.On("GetSubscription", mock.Anything).Return(subscription, nil)
-		cloud.Mock.On("RequestCloudTrial", mock.Anything, mock.Anything, "").Return(subscription, nil)
-		cloud.Mock.On("InvalidateCaches").Return(nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = &cloud
-
-		subscriptionChanged, r, err := th.SystemAdminClient.RequestCloudTrial(&newValidBusinessEmail)
-
-		require.NoError(t, err)
-		require.Equal(t, subscriptionChanged, subscription)
-		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
-	})
-
-	t.Run("ADMIN user are ABLE to request the trial with valid business email", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		// patch the customer with the additional contact updated with the valid business email
-		newValidBusinessEmail.Email = *model.NewString("valid.email@mattermost.com")
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		cloud := mocks.CloudInterface{}
-
-		cloud.Mock.On("GetSubscription", mock.Anything).Return(subscription, nil)
-		cloud.Mock.On("RequestCloudTrial", mock.Anything, mock.Anything, "valid.email@mattermost.com").Return(subscription, nil)
-		cloud.Mock.On("InvalidateCaches").Return(nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = &cloud
-
-		subscriptionChanged, r, err := th.SystemAdminClient.RequestCloudTrial(&newValidBusinessEmail)
-
-		require.NoError(t, err)
-		require.Equal(t, subscriptionChanged, subscription)
-		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
-	})
-
-	t.Run("Empty body returns bad request", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-
-		r, err := th.SystemAdminClient.DoAPIPutBytes("/cloud/request-trial", nil)
-		require.Error(t, err)
-		closeBody(r)
-		require.Equal(t, http.StatusBadRequest, r.StatusCode, "Status Bad Request")
-	})
-}
-
 func Test_validateBusinessEmail(t *testing.T) {
-
 	t.Run("Returns forbidden for invalid business email", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		validBusinessEmail := model.ValidateBusinessEmailRequest{Email: "invalid@slacker.com"}
 
@@ -349,7 +123,7 @@ func Test_validateBusinessEmail(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		res, err := th.SystemAdminClient.ValidateBusinessEmail(&validBusinessEmail)
+		res, err := th.SystemAdminClient.ValidateBusinessEmail(context.Background(), &validBusinessEmail)
 		require.Error(t, err)
 		require.Equal(t, http.StatusForbidden, res.StatusCode, "403")
 	})
@@ -358,7 +132,7 @@ func Test_validateBusinessEmail(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		validBusinessEmail := model.ValidateBusinessEmailRequest{Email: "valid@mattermost.com"}
 
@@ -374,7 +148,7 @@ func Test_validateBusinessEmail(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		res, err := th.SystemAdminClient.ValidateBusinessEmail(&validBusinessEmail)
+		res, err := th.SystemAdminClient.ValidateBusinessEmail(context.Background(), &validBusinessEmail)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, res.StatusCode, "200")
 	})
@@ -383,11 +157,11 @@ func Test_validateBusinessEmail(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
-		r, err := th.SystemAdminClient.DoAPIPostBytes("/cloud/validate-business-email", nil)
+		r, err := th.SystemAdminClient.DoAPIPostBytes(context.Background(), "/cloud/validate-business-email", nil)
 		require.Error(t, err)
 		closeBody(r)
 		require.Equal(t, http.StatusBadRequest, r.StatusCode, "Status Bad Request")
@@ -399,7 +173,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -422,7 +196,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		_, err := th.SystemAdminClient.ValidateWorkspaceBusinessEmail()
+		_, err := th.SystemAdminClient.ValidateWorkspaceBusinessEmail(context.Background())
 		require.NoError(t, err)
 	})
 
@@ -430,7 +204,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -458,7 +232,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		_, err := th.SystemAdminClient.ValidateWorkspaceBusinessEmail()
+		_, err := th.SystemAdminClient.ValidateWorkspaceBusinessEmail(context.Background())
 		require.NoError(t, err)
 	})
 
@@ -466,7 +240,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -489,7 +263,7 @@ func Test_validateWorkspaceBusinessEmail(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		r, err := th.SystemAdminClient.DoAPIPostBytes("/cloud/validate-workspace-business-email", nil)
+		r, err := th.SystemAdminClient.DoAPIPostBytes(context.Background(), "/cloud/validate-workspace-business-email", nil)
 		require.Error(t, err)
 		closeBody(r)
 		require.Equal(t, http.StatusBadRequest, r.StatusCode, "Status Bad Request")
@@ -566,7 +340,7 @@ func TestGetCloudProducts(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.SystemAdminUser.Email, th.SystemAdminUser.Password)
+		th.Client.Login(context.Background(), th.SystemAdminUser.Email, th.SystemAdminUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -578,7 +352,7 @@ func TestGetCloudProducts(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		returnedProducts, r, err := th.Client.GetCloudProducts()
+		returnedProducts, r, err := th.Client.GetCloudProducts(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
 		require.Equal(t, returnedProducts, cloudProducts)
@@ -588,7 +362,7 @@ func TestGetCloudProducts(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
 
@@ -602,7 +376,7 @@ func TestGetCloudProducts(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		returnedProducts, r, err := th.Client.GetCloudProducts()
+		returnedProducts, r, err := th.Client.GetCloudProducts(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
 		require.Equal(t, returnedProducts, sanitizedProducts)
@@ -640,58 +414,6 @@ func TestGetCloudProducts(t *testing.T) {
 		require.Equal(t, returnedProducts[2].RecurringInterval, model.RecurringInterval("yearly"))
 		require.Equal(t, returnedProducts[2].BillingScheme, model.BillingScheme(""))
 		require.Equal(t, returnedProducts[2].CrossSellsTo, "prod_test2")
-	})
-}
-
-func Test_GetExpandStatsForSubscription(t *testing.T) {
-	status := &model.SubscriptionLicenseSelfServeStatusResponse{
-		IsExpandable: true,
-	}
-
-	licenseId := "licenseID"
-
-	t.Run("NON Admin users are UNABLE to request expand stats for the subscription", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
-
-		cloud := mocks.CloudInterface{}
-
-		cloud.Mock.On("GetLicenseSelfServeStatus", mock.Anything).Return(status, nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = &cloud
-
-		checksMade, r, err := th.Client.GetSubscriptionStatus(licenseId)
-		require.Error(t, err)
-		require.Nil(t, checksMade)
-		require.Equal(t, http.StatusForbidden, r.StatusCode, "403 Forbidden")
-	})
-
-	t.Run("Admin users are UNABLE to request licenses is expendable due missing the id", func(t *testing.T) {
-		th := Setup(t).InitBasic()
-		defer th.TearDown()
-
-		th.Client.Login(th.SystemAdminUser.Email, th.SystemAdminUser.Password)
-
-		cloud := mocks.CloudInterface{}
-
-		cloud.Mock.On("GetLicenseSelfServeStatus", mock.Anything).Return(status, nil)
-
-		cloudImpl := th.App.Srv().Cloud
-		defer func() {
-			th.App.Srv().Cloud = cloudImpl
-		}()
-		th.App.Srv().Cloud = &cloud
-
-		checks, r, err := th.Client.GetSubscriptionStatus("")
-		require.Error(t, err)
-		require.Nil(t, checks)
-		require.Equal(t, http.StatusBadRequest, r.StatusCode, "400 Bad Request")
 	})
 }
 
@@ -740,7 +462,7 @@ func TestGetSelfHostedProducts(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.SystemAdminUser.Email, th.SystemAdminUser.Password)
+		th.Client.Login(context.Background(), th.SystemAdminUser.Email, th.SystemAdminUser.Password)
 
 		cloud := mocks.CloudInterface{}
 		cloud.Mock.On("GetSelfHostedProducts", mock.Anything, mock.Anything).Return(products, nil)
@@ -750,7 +472,7 @@ func TestGetSelfHostedProducts(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		returnedProducts, r, err := th.Client.GetSelfHostedProducts()
+		returnedProducts, r, err := th.Client.GetSelfHostedProducts(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
 		require.Equal(t, returnedProducts, products)
@@ -760,7 +482,7 @@ func TestGetSelfHostedProducts(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 
-		th.Client.Login(th.BasicUser.Email, th.BasicUser.Password)
+		th.Client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 
 		cloud := mocks.CloudInterface{}
 
@@ -772,7 +494,7 @@ func TestGetSelfHostedProducts(t *testing.T) {
 		}()
 		th.App.Srv().Cloud = &cloud
 
-		returnedProducts, r, err := th.Client.GetSelfHostedProducts()
+		returnedProducts, r, err := th.Client.GetSelfHostedProducts(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, r.StatusCode, "Status OK")
 		require.Equal(t, returnedProducts, sanitizedProducts)

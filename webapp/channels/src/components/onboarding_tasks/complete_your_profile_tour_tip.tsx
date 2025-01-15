@@ -3,12 +3,12 @@
 
 import React, {useEffect} from 'react';
 import {FormattedMessage} from 'react-intl';
-
 import {useDispatch, useSelector} from 'react-redux';
 
 import {TourTip, useMeasurePunchouts} from '@mattermost/components';
+
+import {setShowOnboardingCompleteProfileTour} from 'actions/views/onboarding_tasks';
 import {isShowOnboardingCompleteProfileTour} from 'selectors/views/onboarding_tasks';
-import {setShowOnboardingCompleteProfileTour} from '../../actions/views/onboarding_tasks';
 
 import {OnboardingTasksName, TaskNameMapToSteps} from './constants';
 import {useHandleOnBoardingTaskData} from './onboarding_tasks_manager';
@@ -43,7 +43,7 @@ export const CompleteYourProfileTour = () => {
         </p>
     );
 
-    const overlayPunchOut = useMeasurePunchouts(['status-drop-down-menu-list'], [], {y: -6, height: 6, x: 0, width: 0});
+    const overlayPunchOut = useMeasurePunchouts(['userAccountMenu'], [], {y: -6, height: 6, x: 0, width: 0});
     const onDismiss = (e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
@@ -64,6 +64,7 @@ export const CompleteYourProfileTour = () => {
             singleTip={true}
             showOptOut={false}
             interactivePunchOut={true}
+            zIndex={1058}
         />
     );
 };

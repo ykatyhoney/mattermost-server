@@ -12,10 +12,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/fileutils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/filestore"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/utils"
+	"github.com/mattermost/mattermost/server/v8"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/fileutils"
+	"github.com/mattermost/mattermost/server/v8/platform/shared/filestore"
 )
 
 const (
@@ -38,7 +39,11 @@ type testResourceDetails struct {
 }
 
 func findFile(path string) string {
-	return fileutils.FindPath(path, fileutils.CommonBaseSearchPaths(), func(fileInfo os.FileInfo) bool {
+	// Use the testdata path to search from the root of the monorepo.
+	searchPaths := fileutils.CommonBaseSearchPaths()
+	searchPaths = append(searchPaths, filepath.Join(server.GetPackagePath(), "channels", "testlib", "testdata", "../../../"))
+
+	return fileutils.FindPath(path, searchPaths, func(fileInfo os.FileInfo) bool {
 		return !fileInfo.IsDir()
 	})
 }
@@ -53,7 +58,11 @@ func findDir(dir string) (string, bool) {
 		return path.Dir(srcPath), true
 	}
 
-	found := fileutils.FindPath(dir, fileutils.CommonBaseSearchPaths(), func(fileInfo os.FileInfo) bool {
+	// Use the testdata path to search from the root of the monorepo.
+	searchPaths := fileutils.CommonBaseSearchPaths()
+	searchPaths = append(searchPaths, filepath.Join(server.GetPackagePath(), "channels", "testlib", "testdata", "../../../"))
+
+	found := fileutils.FindPath(dir, searchPaths, func(fileInfo os.FileInfo) bool {
 		return fileInfo.IsDir()
 	})
 	if found == "" {
@@ -74,6 +83,7 @@ func getTestResourcesToSetup() []testResourceDetails {
 		{"templates", "templates", resourceTypeFolder, actionSymlink},
 		{"tests", "tests", resourceTypeFolder, actionSymlink},
 		{"fonts", "fonts", resourceTypeFolder, actionSymlink},
+		{"channels/app/plugin_api_tests", "channels/app/plugin_api_tests", resourceTypeFolder, actionSymlink},
 		{"channels/utils/policies-roles-mapping.json", "channels/utils/policies-roles-mapping.json", resourceTypeFile, actionSymlink},
 	}
 
@@ -171,7 +181,6 @@ func SetupTestResources() (string, error) {
 		} else {
 			return "", errors.Wrapf(err, "Invalid action: %d", testResource.action)
 		}
-
 	}
 
 	return tempDir, nil

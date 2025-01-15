@@ -2,14 +2,13 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-
 import {useIntl} from 'react-intl';
+
 import useOpenStartTrialFormModal from 'components/common/hooks/useOpenStartTrialFormModal';
 
 import './start_trial_btn.scss';
 
 export type StartTrialBtnProps = {
-    message: string;
     telemetryId: string;
     onClick?: () => void;
     handleEmbargoError?: () => void;
@@ -56,7 +55,7 @@ const StartTrialBtn = ({
     ) : (
         <a
             id={id}
-            className='StartTrialBtn start-trial-btn'
+            className='btn btn-secondary'
             onClick={startTrial}
         >
             {btnText}

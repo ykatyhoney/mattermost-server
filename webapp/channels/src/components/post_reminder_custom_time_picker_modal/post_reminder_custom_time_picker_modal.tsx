@@ -1,23 +1,17 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useCallback, useEffect, useState} from 'react';
-import {FormattedMessage} from 'react-intl';
-import {Moment} from 'moment-timezone';
+import type {Moment} from 'moment-timezone';
+import React, {useCallback} from 'react';
+import {useIntl} from 'react-intl';
 
-import GenericModal from 'components/generic_modal';
-import {isKeyPressed} from 'utils/keyboard';
-import {localizeMessage} from 'utils/utils';
-import DateTimeInput, {getRoundedTime} from 'components/custom_status/date_time_input';
+import {getRoundedTime} from 'components/custom_status/date_time_input';
+import DateTimePickerModal from 'components/date_time_picker_modal/date_time_picker_modal';
 
 import {toUTCUnix} from 'utils/datetime';
 import {getCurrentMomentForTimezone} from 'utils/timezone';
 
-import Constants from 'utils/constants';
-
-import {PropsFromRedux} from './index';
-
-import './post_reminder_custom_time_picker_modal.scss';
+import type {PropsFromRedux} from './index';
 
 type Props = PropsFromRedux & {
     onExited: () => void;
@@ -27,64 +21,29 @@ type Props = PropsFromRedux & {
     };
 };
 
-const modalHeaderText = (
-    <FormattedMessage
-        id='post_reminder.custom_time_picker_modal.header'
-        defaultMessage='Set a reminder'
-    />
-);
-const confirmButtonText = (
-    <FormattedMessage
-        id='post_reminder.custom_time_picker_modal.submit_button'
-        defaultMessage='Set reminder'
-    />
-);
-
 function PostReminderCustomTimePicker({userId, timezone, onExited, postId, actions}: Props) {
+    const {formatMessage} = useIntl();
+    const ariaLabel = formatMessage({id: 'post_reminder_custom_time_picker_modal.defaultMsg', defaultMessage: 'Set a reminder'});
+    const header = formatMessage({id: 'post_reminder.custom_time_picker_modal.header', defaultMessage: 'Set a reminder'});
+    const confirmButtonText = formatMessage({id: 'post_reminder.custom_time_picker_modal.submit_button', defaultMessage: 'Set reminder'});
+
     const currentTime = getCurrentMomentForTimezone(timezone);
-    const initialReminderTime: Moment = getRoundedTime(currentTime);
-    const [customReminderTime, setCustomReminderTime] = useState<Moment>(initialReminderTime);
-    const handleConfirm = useCallback(() => {
-        actions.addPostReminder(userId, postId, toUTCUnix(customReminderTime.toDate()));
-    }, [customReminderTime]);
+    const initialReminderTime = getRoundedTime(currentTime);
 
-    const [isDatePickerOpen, setIsDatePickerOpen] = useState<boolean>(false);
-
-    const handleKeyDown = useCallback((event: KeyboardEvent) => {
-        if (isKeyPressed(event, Constants.KeyCodes.ESCAPE) && !isDatePickerOpen) {
-            onExited();
-        }
-    }, [isDatePickerOpen, onExited]);
-
-    useEffect(() => {
-        document.addEventListener('keydown', handleKeyDown);
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [handleKeyDown]);
+    const handleConfirm = useCallback((dateTime: Moment) => {
+        actions.addPostReminder(userId, postId, toUTCUnix(dateTime.toDate()));
+        onExited();
+    }, [actions, postId, userId, onExited]);
 
     return (
-        <GenericModal
-            ariaLabel={localizeMessage('post_reminder_custom_time_picker_modal.defaultMsg', 'Set a reminder')}
+        <DateTimePickerModal
             onExited={onExited}
-            modalHeaderText={modalHeaderText}
+            ariaLabel={ariaLabel}
+            header={header}
+            initialTime={initialReminderTime}
+            onConfirm={handleConfirm}
             confirmButtonText={confirmButtonText}
-            handleConfirm={handleConfirm}
-            handleEnterKeyPress={handleConfirm}
-            id='PostReminderCustomTimePickerModal'
-            className={'post-reminder-modal'}
-            compassDesign={true}
-            enforceFocus={true}
-            keyboardEscape={false}
-        >
-            <DateTimeInput
-                time={customReminderTime}
-                handleChange={setCustomReminderTime}
-                timezone={timezone}
-                setIsDatePickerOpen={setIsDatePickerOpen}
-            />
-        </GenericModal>
+        />
     );
 }
 

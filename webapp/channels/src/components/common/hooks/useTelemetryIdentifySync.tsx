@@ -5,7 +5,6 @@ import {useEffect} from 'react';
 import {useSelector} from 'react-redux';
 
 import {Client4} from 'mattermost-redux/client';
-
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 
 /**
@@ -25,8 +24,6 @@ function useTelemetryIdentitySync() {
             Client4.setUserRoles(userRoles);
         }
     }, [userId, userRoles]);
-
-    return null;
 }
 
 export default useTelemetryIdentitySync;

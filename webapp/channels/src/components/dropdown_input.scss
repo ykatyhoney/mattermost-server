@@ -1,8 +1,6 @@
 $dropdown_input_index: 999999;
 
 .DropdownInput {
-    z-index: $dropdown_input_index;
-
     &.Input_container {
         margin-top: 20px;
     }
@@ -23,6 +21,20 @@ $dropdown_input_index: 999999;
     .Input_legend {
         margin-left: 8px;
     }
+}
+
+.DropdownInput__controlContainer {
+    .DropDown__control {
+        background-color: var(--center-channel-bg);
+    }
+}
+
+.DropDown__menu {
+    background-color: var(--center-channel-bg) !important;
+}
+
+.DropDown__single-value {
+    color: var(--center-channel-color) !important;
 }
 
 .DropdownInput__indicatorsContainer {

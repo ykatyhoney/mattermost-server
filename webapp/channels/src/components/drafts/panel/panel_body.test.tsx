@@ -1,24 +1,23 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import type {ComponentProps} from 'react';
 import React from 'react';
 import {Provider} from 'react-redux';
 
-import mockStore from 'tests/test_store';
-
-import {PostDraft} from 'types/store/draft';
-
-import * as utils from 'utils/utils';
+import {PostPriority} from '@mattermost/types/posts';
+import type {UserProfile, UserStatus} from '@mattermost/types/users';
 
 import {mountWithIntl} from 'tests/helpers/intl-test-helper';
+import mockStore from 'tests/test_store';
+import * as utils from 'utils/utils';
 
-import {UserProfile, UserStatus} from '@mattermost/types/users';
-import {PostPriority} from '@mattermost/types/posts';
+import type {PostDraft} from 'types/store/draft';
 
 import PanelBody from './panel_body';
 
 describe('components/drafts/panel/panel_body', () => {
-    const baseProps = {
+    const baseProps: ComponentProps<typeof PanelBody> = {
         channelId: 'channel_id',
         displayName: 'display_name',
         fileInfos: [] as PostDraft['fileInfos'],
@@ -71,6 +70,12 @@ describe('components/drafts/panel/panel_body', () => {
                 },
             },
         },
+        views: {
+            rhs: {
+                isSidebarExpanded: false,
+                isSidebarOpen: false,
+            },
+        },
     };
 
     it('should match snapshot', () => {
@@ -112,7 +117,7 @@ describe('components/drafts/panel/panel_body', () => {
                     {...baseProps}
                     priority={{
                         priority: PostPriority.IMPORTANT,
-                        requested_ack: true,
+                        requested_ack: false,
                     }}
                 />
             </Provider>,

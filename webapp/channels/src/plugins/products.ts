@@ -1,13 +1,11 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Store} from 'redux';
-
-import {Client4} from 'mattermost-redux/client';
-import {getConfig} from 'mattermost-redux/selectors/entities/general';
-import {DispatchFunc, GetStateFunc} from 'mattermost-redux/types/actions';
+import type {Store} from 'redux';
 
 import store from 'stores/redux_store';
+
+import type {ActionFuncAsync, ThunkActionFunc} from 'types/store';
 
 import PluginRegistry from './registry';
 
@@ -16,8 +14,8 @@ export abstract class ProductPlugin {
     abstract uninitialize(): void;
 }
 
-export function initializeProducts() {
-    return (dispatch: DispatchFunc) => {
+export function initializeProducts(): ThunkActionFunc<Promise<unknown>> {
+    return (dispatch) => {
         return Promise.all([
             dispatch(loadRemoteModules()),
             dispatch(configureClient()),
@@ -25,19 +23,16 @@ export function initializeProducts() {
     };
 }
 
-function configureClient() {
-    return (dispatch: DispatchFunc, getState: GetStateFunc) => {
-        const config = getConfig(getState());
-
-        Client4.setUseBoardsProduct(config.FeatureFlagBoardsProduct === 'true');
-
+function configureClient(): ActionFuncAsync {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    return (dispatch, getState) => {
         return Promise.resolve({data: true});
     };
 }
 
-function loadRemoteModules() {
+function loadRemoteModules(): ActionFuncAsync {
     /* eslint-disable no-console */
-    return async (/*dispatch: DispatchFunc, getState: GetStateFunc*/) => {
+    return async (/*dispatch, getState*/) => {
         // const config = getConfig(getState());
 
         /**
@@ -47,24 +42,7 @@ function loadRemoteModules() {
          * Note that these import paths must be statically defined or else they won't be found at runtime. They
          * can't be constructed based on the name of a product at runtime.
          */
-        const products = [
-            {
-                id: 'boards',
-                load: () => ({
-                    index: import('boards'),
-
-                    // manifest: import('boards/manifest'),
-                }),
-            },
-            {
-                id: 'playbooks',
-                load: () => ({
-                    index: import('playbooks'),
-
-                    // manifest: import('boards/manifest'),
-                }),
-            },
-        ];
+        const products: any[] = [];
 
         await Promise.all(products.map(async (product) => {
             if (!REMOTE_CONTAINERS[product.id]) {

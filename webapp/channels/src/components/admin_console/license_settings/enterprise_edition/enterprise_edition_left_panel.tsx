@@ -1,23 +1,28 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {RefObject, useEffect, useState} from 'react';
 import classNames from 'classnames';
-import {FormattedDate, FormattedMessage, FormattedNumber, FormattedTime, useIntl} from 'react-intl';
+import React, {useEffect, useState} from 'react';
+import type {RefObject} from 'react';
+import {FormattedDate, FormattedMessage, FormattedNumber, FormattedTime, defineMessages, useIntl} from 'react-intl';
 
-import Tag from 'components/widgets/tag/tag';
-
-import {ClientLicense} from '@mattermost/types/config';
+import type {ClientLicense} from '@mattermost/types/config';
 
 import {Client4} from 'mattermost-redux/client';
 
-import {getRemainingDaysFromFutureTimestamp, toTitleCase} from 'utils/utils';
+import useOpenPricingModal from 'components/common/hooks/useOpenPricingModal';
+import useOpenSalesLink from 'components/common/hooks/useOpenSalesLink';
+import Tag from 'components/widgets/tag/tag';
+
 import {FileTypes} from 'utils/constants';
-import {getSkuDisplayName} from 'utils/subscription';
 import {calculateOverageUserActivated} from 'utils/overage_team';
+import {getSkuDisplayName} from 'utils/subscription';
+import {getRemainingDaysFromFutureTimestamp, toTitleCase} from 'utils/utils';
 
 import './enterprise_edition.scss';
-import useOpenPricingModal from 'components/common/hooks/useOpenPricingModal';
+
+const DAYS_UNTIL_EXPIRY_WARNING_DISPLAY_THRESHOLD = 30;
+const DAYS_UNTIL_EXPIRY_DANGER_DISPLAY_THRESHOLD = 5;
 
 export interface EnterpriseEditionProps {
     openEELicenseModal: () => void;
@@ -31,6 +36,10 @@ export interface EnterpriseEditionProps {
     handleChange: () => void;
     statsActiveUsers: number;
 }
+
+export const messages = defineMessages({
+    keyRemove: {id: 'admin.license.keyRemove', defaultMessage: 'Remove license and downgrade to Mattermost Free'},
+});
 
 const EnterpriseEditionLeftPanel = ({
     openEELicenseModal,
@@ -47,10 +56,10 @@ const EnterpriseEditionLeftPanel = ({
     const {formatMessage} = useIntl();
     const [unsanitizedLicense, setUnsanitizedLicense] = useState(license);
     const openPricingModal = useOpenPricingModal();
+    const [openContactSales] = useOpenSalesLink();
 
     useEffect(() => {
         async function fetchUnSanitizedLicense() {
-            // This solves this the issue reported here: https://mattermost.atlassian.net/browse/MM-42906
             try {
                 const unsanitizedL = await Client4.getClientLicenseOld();
                 setUnsanitizedLicense(unsanitizedL);
@@ -117,11 +126,15 @@ const EnterpriseEditionLeftPanel = ({
             <div className='licenseInformation'>
                 <div className='license-details-top'>
                     <span className='title'>{'License details'}</span>
-                    {(expirationDays <= 30) &&
-                        <span className='expiration-days'>
-                            {`Expires in ${expirationDays} day${expirationDays > 1 ? 's' : ''}`}
-                        </span>
-                    }
+                    <button
+                        className='add-seats-button btn btn-primary'
+                        onClick={openContactSales}
+                    >
+                        <FormattedMessage
+                            id={'admin.license.enterpriseEdition.add.seats'}
+                            defaultMessage='+ Add seats'
+                        />
+                    </button>
                 </div>
                 {
                     renderLicenseContent(
@@ -134,10 +147,12 @@ const EnterpriseEditionLeftPanel = ({
                         fileInputRef,
                         handleChange,
                         statsActiveUsers,
+                        expirationDays,
                     )
                 }
             </div>
             <div className='license-notices'>
+                {/* This notice should not be translated */}
                 {upgradedFromTE ? <>
                     <p>
                         {'When using Mattermost Enterprise Edition, the software is offered under a commercial license. See '}
@@ -162,7 +177,7 @@ const EnterpriseEditionLeftPanel = ({
 
 type LegendValues = 'START DATE:' | 'EXPIRES:' | 'LICENSED SEATS:' | 'ACTIVE USERS:' | 'EDITION:' | 'LICENSE ISSUED:' | 'NAME:' | 'COMPANY / ORG:'
 
-const renderLicenseValues = (activeUsers: number, seatsPurchased: number) => ({legend, value}: {legend: LegendValues; value: string | JSX.Element | null}, index: number): React.ReactNode => {
+const renderLicenseValues = (activeUsers: number, seatsPurchased: number, expirationDays: number) => ({legend, value}: {legend: LegendValues; value: string | JSX.Element | null}, index: number): React.ReactNode => {
     if (legend === 'ACTIVE USERS:') {
         const {isBetween5PercerntAnd10PercentPurchasedSeats, isOver10PercerntPurchasedSeats} = calculateOverageUserActivated({activeUsers, seatsPurchased});
         return (
@@ -184,6 +199,26 @@ const renderLicenseValues = (activeUsers: number, seatsPurchased: number) => ({l
                         'value--over-seats-purchased': isOver10PercerntPurchasedSeats,
                     })}
                 >{value}</span>
+            </div>
+        );
+    } else if (legend === 'EXPIRES:') {
+        return (
+            <div
+                className='item-element'
+                key={value + index.toString()}
+            >
+                <span className='legend'>{legend}</span>
+                <span className='value'>{value}</span>
+                {(expirationDays <= DAYS_UNTIL_EXPIRY_WARNING_DISPLAY_THRESHOLD) &&
+                <span
+                    className={classNames('expiration-days', {
+                        'expiration-days-warning': expirationDays <= DAYS_UNTIL_EXPIRY_WARNING_DISPLAY_THRESHOLD,
+                        'expiration-days-danger': expirationDays <= DAYS_UNTIL_EXPIRY_DANGER_DISPLAY_THRESHOLD,
+                    })}
+                >
+                    {`Expires in ${expirationDays} day${expirationDays > 1 ? 's' : ''}`}
+                </span>
+                }
             </div>
         );
     }
@@ -209,6 +244,7 @@ const renderLicenseContent = (
     fileInputRef: RefObject<HTMLInputElement>,
     handleChange: () => void,
     statsActiveUsers: number,
+    expirationDays: number,
 ) => {
     // Note: DO NOT LOCALISE THESE STRINGS. Legally we can not since the license is in English.
 
@@ -246,7 +282,7 @@ const renderLicenseContent = (
 
     return (
         <div className='licenseElements'>
-            {licenseValues.map(renderLicenseValues(statsActiveUsers, parseInt(license.Users, 10)))}
+            {licenseValues.map(renderLicenseValues(statsActiveUsers, parseInt(license.Users, 10), expirationDays))}
             <hr/>
             {renderAddNewLicenseButton(fileInputRef, handleChange)}
             {renderRemoveButton(handleRemove, isDisabled, removing)}
@@ -285,12 +321,7 @@ const renderRemoveButton = (
     isDisabled: boolean,
     removing: boolean,
 ) => {
-    let removeButtonText = (
-        <FormattedMessage
-            id='admin.license.keyRemove'
-            defaultMessage='Remove license and downgrade to Mattermost Free'
-        />
-    );
+    let removeButtonText = (<FormattedMessage {...messages.keyRemove}/>);
     if (removing) {
         removeButtonText = (
             <FormattedMessage

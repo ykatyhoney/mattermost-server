@@ -18,8 +18,8 @@ import (
 	"github.com/pkg/errors"
 	gomail "gopkg.in/mail.v2"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
 const (
@@ -292,7 +292,7 @@ func sendMailUsingConfigAdvanced(mail mailData, config *SMTPConfig) error {
 const SendGridXSMTPAPIHeader = "X-SMTPAPI"
 
 func sendMail(c smtpClient, mail mailData, date time.Time, config *SMTPConfig) error {
-	mlog.Debug("sending mail", mlog.String("to", mail.smtpTo), mlog.String("subject", mail.subject))
+	mlog.Info("sending mail", mlog.String("to", mail.smtpTo), mlog.String("subject", mail.subject))
 
 	htmlMessage := mail.htmlBody
 

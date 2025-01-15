@@ -2,14 +2,15 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {FormattedMessage} from 'react-intl';
 import {ProgressBar} from 'react-bootstrap';
+import {FormattedMessage} from 'react-intl';
 
 import FilenameOverlay from 'components/file_attachment/filename_overlay';
+
 import {getFileTypeFromMime} from 'utils/file_utils';
 import * as Utils from 'utils/utils';
 
-import {FilePreviewInfo} from './file_preview';
+import type {FilePreviewInfo} from './file_preview';
 
 type Props = {
     handleRemove: (id: string) => void;
@@ -36,7 +37,7 @@ export default class FileProgressPreview extends React.PureComponent<Props> {
             previewImage = <div className={'file-icon ' + Utils.getIconClassName(fileType)}/>;
 
             fileNameComponent = (
-                <React.Fragment>
+                <>
                     <FilenameOverlay
                         fileInfo={fileInfo}
                         compactDisplay={false}
@@ -49,16 +50,16 @@ export default class FileProgressPreview extends React.PureComponent<Props> {
                                 defaultMessage='Processing...'
                             />
                         ) : (
-                            <React.Fragment>
+                            <>
                                 <FormattedMessage
                                     id='admin.plugin.uploading'
                                     defaultMessage='Uploading...'
                                 />
                                 <span>{percentTxt}</span>
-                            </React.Fragment>
+                            </>
                         )}
                     </span>
-                </React.Fragment>
+                </>
             );
 
             if (percent) {

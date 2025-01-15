@@ -10,10 +10,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/config"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/stretchr/testify/require"
 )
 
 var initBasicOnce sync.Once
@@ -44,7 +46,7 @@ func Setup(tb testing.TB) *TestHelper {
 	return setupTestHelper(dbStore, false, tb)
 }
 
-func setupTestHelper(s store.Store, includeCacheLayer bool, tb testing.TB) *TestHelper {
+func setupTestHelper(s store.Store, _ bool, tb testing.TB) *TestHelper {
 	tempWorkspace, err := os.MkdirTemp("", "userservicetest")
 	if err != nil {
 		panic(err)
@@ -68,7 +70,8 @@ func setupTestHelper(s store.Store, includeCacheLayer bool, tb testing.TB) *Test
 	*config.PasswordSettings.Uppercase = false
 	*config.PasswordSettings.Symbol = false
 	*config.PasswordSettings.Number = false
-	configStore.Set(config)
+	_, _, err = configStore.Set(config)
+	require.NoError(tb, err)
 
 	buffer := &bytes.Buffer{}
 	return &TestHelper{
@@ -78,7 +81,7 @@ func setupTestHelper(s store.Store, includeCacheLayer bool, tb testing.TB) *Test
 			oAuthStore:   s.OAuth(),
 			config:       configStore.Get,
 		},
-		Context:     request.EmptyContext(nil),
+		Context:     request.EmptyContext(mlog.CreateConsoleTestLogger(tb)),
 		configStore: configStore,
 		dbStore:     s,
 		LogBuffer:   buffer,
@@ -123,11 +126,11 @@ func (th *TestHelper) CreateUserOrGuest(guest bool) *model.User {
 
 	var err error
 	if guest {
-		if user, err = th.service.CreateUser(user, UserCreateOptions{Guest: true}); err != nil {
+		if user, err = th.service.CreateUser(th.Context, user, UserCreateOptions{Guest: true}); err != nil {
 			panic(err)
 		}
 	} else {
-		if user, err = th.service.CreateUser(user, UserCreateOptions{}); err != nil {
+		if user, err = th.service.CreateUser(th.Context, user, UserCreateOptions{}); err != nil {
 			panic(err)
 		}
 	}

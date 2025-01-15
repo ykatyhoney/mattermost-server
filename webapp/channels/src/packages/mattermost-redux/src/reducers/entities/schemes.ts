@@ -3,13 +3,14 @@
 
 import {combineReducers} from 'redux';
 
+import type {Scheme} from '@mattermost/types/schemes';
+
+import type {MMReduxAction} from 'mattermost-redux/action_types';
 import {SchemeTypes, UserTypes} from 'mattermost-redux/action_types';
-import {GenericAction} from 'mattermost-redux/types/actions';
-import {SchemesState, Scheme} from '@mattermost/types/schemes';
 
 function schemes(state: {
     [x: string]: Scheme;
-} = {}, action: GenericAction): {
+} = {}, action: MMReduxAction): {
         [x: string]: Scheme;
     } {
     switch (action.type) {
@@ -44,6 +45,6 @@ function schemes(state: {
     }
 }
 
-export default (combineReducers({
+export default combineReducers({
     schemes,
-}) as (b: SchemesState, a: GenericAction) => SchemesState);
+});

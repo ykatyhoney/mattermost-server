@@ -3,16 +3,15 @@
 
 import {mount, shallow} from 'enzyme';
 import React from 'react';
-
-import {DeepPartial} from 'redux';
-
 import {Provider} from 'react-redux';
+
+import type {DeepPartial} from '@mattermost/types/utilities';
 
 import ExternalImage from 'components/external_image';
 
 import mockStore from 'tests/test_store';
 
-import {GlobalState} from 'types/store';
+import type {GlobalState} from 'types/store';
 
 import YoutubeVideo from './youtube_video';
 
@@ -32,6 +31,7 @@ describe('YoutubeVideo', () => {
                 url: 'linkForThumbnail',
             }],
         },
+        youtubeReferrerPolicy: false,
     };
 
     const initialState: DeepPartial<GlobalState> = {
@@ -62,6 +62,17 @@ describe('YoutubeVideo', () => {
 
     test('should match snapshot for playing state', () => {
         const wrapper = shallow(<YoutubeVideo {...baseProps}/>);
+        wrapper.setState({playing: true});
+        expect(wrapper).toMatchSnapshot();
+    });
+
+    test('should match snapshot for playing state and `youtubeReferrerPolicy = true`', () => {
+        const wrapper = shallow(
+            <YoutubeVideo
+                {...baseProps}
+                youtubeReferrerPolicy={true}
+            />,
+        );
         wrapper.setState({playing: true});
         expect(wrapper).toMatchSnapshot();
     });

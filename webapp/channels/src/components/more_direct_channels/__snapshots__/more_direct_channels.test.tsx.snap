@@ -9,7 +9,7 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
   bsClass="modal"
   dialogClassName="a11y__modal more-modal more-direct-channels"
   dialogComponentClass={[Function]}
-  enforceFocus={false}
+  enforceFocus={true}
   id="moreDmModal"
   keyboard={true}
   manager={
@@ -29,7 +29,7 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
   onHide={[Function]}
   renderBackdrop={[Function]}
   restoreFocus={true}
-  role="dialog"
+  role="none"
   show={true}
 >
   <ModalHeader
@@ -57,6 +57,7 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
       addValue={[Function]}
       currentUserId="current_user_id"
       handleDelete={[Function]}
+      handleHide={[Function]}
       handlePageChange={[Function]}
       handleSubmit={[Function]}
       isExistingChannel={false}
@@ -88,12 +89,14 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -125,12 +128,14 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -162,12 +167,14 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -199,12 +206,14 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -236,12 +245,14 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -267,7 +278,7 @@ exports[`components/MoreDirectChannels should exclude deleted users if there is 
     componentClass="div"
   >
     <button
-      className="btn btn-link"
+      className="btn btn-tertiary"
       id="closeModalButton"
       type="button"
     >
@@ -289,7 +300,7 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
   bsClass="modal"
   dialogClassName="a11y__modal more-modal more-direct-channels"
   dialogComponentClass={[Function]}
-  enforceFocus={false}
+  enforceFocus={true}
   id="moreDmModal"
   keyboard={true}
   manager={
@@ -309,7 +320,7 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
   onHide={[Function]}
   renderBackdrop={[Function]}
   restoreFocus={true}
-  role="dialog"
+  role="none"
   show={true}
 >
   <ModalHeader
@@ -337,6 +348,7 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
       addValue={[Function]}
       currentUserId="current_user_id"
       handleDelete={[Function]}
+      handleHide={[Function]}
       handlePageChange={[Function]}
       handleSubmit={[Function]}
       isExistingChannel={false}
@@ -368,12 +380,14 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -405,12 +419,14 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -442,12 +458,14 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -484,12 +502,14 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -523,12 +543,14 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
             "mfa_active": false,
             "nickname": "",
             "notify_props": Object {
+              "calls_desktop_sound": "true",
               "channel": "false",
               "comments": "never",
               "desktop": "default",
               "desktop_sound": "false",
               "email": "false",
               "first_name": "false",
+              "highlight_keys": "",
               "mark_unread": "mention",
               "mention_keys": "",
               "push": "none",
@@ -554,7 +576,7 @@ exports[`components/MoreDirectChannels should match snapshot 1`] = `
     componentClass="div"
   >
     <button
-      className="btn btn-link"
+      className="btn btn-tertiary"
       id="closeModalButton"
       type="button"
     >

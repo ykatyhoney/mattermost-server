@@ -3,22 +3,22 @@
 
 import {getName} from 'country-list';
 import React, {useCallback, useEffect, useState} from 'react';
-import {FormattedMessage} from 'react-intl';
+import {defineMessage, FormattedMessage} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
 import {useHistory} from 'react-router-dom';
 
 import {getCloudCustomer, updateCloudCustomer, updateCloudCustomerAddress} from 'mattermost-redux/actions/cloud';
 
-import BlockableLink from 'components/admin_console/blockable_link';
-import DropdownInput from 'components/dropdown_input';
-import StateSelector from 'components/payment_form/state_selector';
-import Input from 'components/widgets/inputs/input/input';
-import SaveButton from 'components/save_button';
-import {GlobalState} from 'types/store';
-import {COUNTRIES} from 'utils/countries';
-import * as Utils from 'utils/utils';
-
 import {setNavigationBlocked} from 'actions/admin_actions.jsx';
+
+import BlockableLink from 'components/admin_console/blockable_link';
+import CountrySelector from 'components/payment_form/country_selector';
+import StateSelector from 'components/payment_form/state_selector';
+import SaveButton from 'components/save_button';
+import AdminHeader from 'components/widgets/admin_console/admin_header';
+import Input from 'components/widgets/inputs/input/input';
+
+import type {GlobalState} from 'types/store';
 
 import './company_info_edit.scss';
 
@@ -135,16 +135,12 @@ const CompanyInfoEdit: React.FC<Props> = () => {
 
     const companyAddressInput = (
         <>
-            <DropdownInput
+            <CountrySelector
                 onChange={(option) => {
                     setCountry(option.value);
                     setContentChanged(true);
                 }}
-                value={country ? {value: country, label: country} : undefined}
-                options={COUNTRIES.map((c) => ({value: c.name, label: c.name}))}
-                legend={Utils.localizeMessage('admin.billing.company_info.country', 'Country')}
-                placeholder={Utils.localizeMessage('admin.billing.company_info.country', 'Country')}
-                name={'country_dropdown'}
+                value={country || undefined}
             />
             <div className='form-row'>
                 <Input
@@ -152,7 +148,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                     type='text'
                     value={address}
                     onChange={updateState(setAddress)}
-                    placeholder={Utils.localizeMessage('admin.billing.company_info.address', 'Address')}
+                    placeholder={defineMessage({id: 'admin.billing.company_info.address', defaultMessage: 'Address'})}
                     required={true}
                 />
             </div>
@@ -162,7 +158,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                     type='text'
                     value={address2}
                     onChange={updateState(setAddress2)}
-                    placeholder={Utils.localizeMessage('admin.billing.company_info.address_2', 'Address 2')}
+                    placeholder={defineMessage({id: 'admin.billing.company_info.address_2', defaultMessage: 'Address 2'})}
                 />
             </div>
             <div className='form-row'>
@@ -171,7 +167,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                     type='text'
                     value={city}
                     onChange={updateState(setCity)}
-                    placeholder={Utils.localizeMessage('admin.billing.company_info.city', 'City')}
+                    placeholder={defineMessage({id: 'admin.billing.company_info.city', defaultMessage: 'City'})}
                     required={true}
                 />
             </div>
@@ -192,7 +188,10 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                         type='text'
                         value={postalCode}
                         onChange={updateState(setPostalCode)}
-                        placeholder={Utils.localizeMessage('admin.billing.company_info.zipcode', 'Zip/Postal Code')}
+                        placeholder={defineMessage({
+                            id: 'admin.billing.company_info.zipcode',
+                            defaultMessage: 'Zip/Postal Code',
+                        })}
                         required={true}
                     />
                 </div>
@@ -202,7 +201,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
 
     return (
         <div className='wrapper--fixed CompanyInfoEdit'>
-            <div className='admin-console__header with-back'>
+            <AdminHeader withBackButton={true}>
                 <div>
                     <BlockableLink
                         to='/admin_console/billing/company_info'
@@ -213,7 +212,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                         defaultMessage='Edit Company Information'
                     />
                 </div>
-            </div>
+            </AdminHeader>
             <div className='admin-console__wrapper'>
                 <div className='admin-console__content'>
                     <div className='CompanyInfoEdit__card'>
@@ -230,7 +229,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                                     type='text'
                                     value={companyName}
                                     onChange={updateState(setCompanyName)}
-                                    placeholder={Utils.localizeMessage('admin.billing.company_info.companyName', 'Company name')}
+                                    placeholder={defineMessage({id: 'admin.billing.company_info.companyName', defaultMessage: 'Company name'})}
                                     required={true}
                                 />
                             </div>
@@ -240,7 +239,7 @@ const CompanyInfoEdit: React.FC<Props> = () => {
                                     type='number'
                                     value={numEmployees}
                                     onChange={updateNumEmployees}
-                                    placeholder={Utils.localizeMessage('admin.billing.company_info.numEmployees', 'Number of employees (optional)')}
+                                    placeholder={defineMessage({id: 'admin.billing.company_info.numEmployees', defaultMessage: 'Number of employees (optional)'})}
                                 />
                             </div>
                             <div className='section-title'>

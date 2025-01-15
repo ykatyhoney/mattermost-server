@@ -2,21 +2,21 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {screen, fireEvent} from '@testing-library/react';
+
+import type {PostType} from '@mattermost/types/posts';
+import type {DeepPartial} from '@mattermost/types/utilities';
 
 import {shallowWithIntl} from 'tests/helpers/intl-test-helper';
+import {fireEvent, renderWithContext, screen} from 'tests/react_testing_utils';
 import {Locations} from 'utils/constants';
 import {TestHelper} from 'utils/test_helper';
-import {renderWithIntlAndStore} from 'tests/react_testing_utils';
-import {GlobalState} from 'types/store';
 
-import {DeepPartial} from '@mattermost/types/utilities';
-import {PostType} from '@mattermost/types/posts';
+import type {GlobalState} from 'types/store';
 
-import * as dotUtils from './utils';
+import DotMenu from './dot_menu';
+import type {DotMenuClass} from './dot_menu';
+
 jest.mock('./utils');
-
-import DotMenu, {DotMenuClass} from './dot_menu';
 
 describe('components/dot_menu/DotMenu', () => {
     const latestPost = {
@@ -76,7 +76,7 @@ describe('components/dot_menu/DotMenu', () => {
                 },
                 currentUserId: 'current_user_id',
                 profilesInChannel: {
-                    current_user_id: ['user_1'],
+                    current_user_id: new Set(['user_1']),
                 },
             },
             teams: {
@@ -146,6 +146,7 @@ describe('components/dot_menu/DotMenu', () => {
         threadReplyCount: 0,
         userId: 'user_id_1',
         isMilitaryTime: false,
+        canMove: true,
     };
 
     test('should match snapshot, on Center', () => {
@@ -172,7 +173,33 @@ describe('components/dot_menu/DotMenu', () => {
             canEdit: true,
             canDelete: true,
         };
-        const wrapper = renderWithIntlAndStore(
+        const wrapper = renderWithContext(
+            <DotMenu {...props}/>,
+            initialState,
+        );
+
+        expect(wrapper).toMatchSnapshot();
+    });
+
+    test('should match snapshot, can move', () => {
+        const props = {
+            ...baseProps,
+            canMove: true,
+        };
+        const wrapper = renderWithContext(
+            <DotMenu {...props}/>,
+            initialState,
+        );
+
+        expect(wrapper).toMatchSnapshot();
+    });
+
+    test('should match snapshot, cannot move', () => {
+        const props = {
+            ...baseProps,
+            canMove: false,
+        };
+        const wrapper = renderWithContext(
             <DotMenu {...props}/>,
             initialState,
         );
@@ -185,7 +212,7 @@ describe('components/dot_menu/DotMenu', () => {
             ...baseProps,
             location: Locations.CENTER,
         };
-        renderWithIntlAndStore(
+        renderWithContext(
             <DotMenu {...props}/>,
             initialState,
         );
@@ -200,7 +227,7 @@ describe('components/dot_menu/DotMenu', () => {
             ...baseProps,
             channelIsArchived: true,
         };
-        renderWithIntlAndStore(
+        renderWithContext(
             <DotMenu {...props}/>,
             initialState,
         );
@@ -215,7 +242,7 @@ describe('components/dot_menu/DotMenu', () => {
             ...baseProps,
             location: Locations.SEARCH,
         };
-        renderWithIntlAndStore(
+        renderWithContext(
             <DotMenu {...props}/>,
             initialState,
         );
@@ -235,7 +262,7 @@ describe('components/dot_menu/DotMenu', () => {
                 ...baseProps,
                 ...caseProps,
             };
-            renderWithIntlAndStore(
+            renderWithContext(
                 <DotMenu {...props}/>,
                 initialState,
             );
@@ -256,7 +283,7 @@ describe('components/dot_menu/DotMenu', () => {
                 ...baseProps,
                 ...caseProps,
             };
-            renderWithIntlAndStore(
+            renderWithContext(
                 <DotMenu {...props}/>,
                 initialState,
             );
@@ -277,7 +304,7 @@ describe('components/dot_menu/DotMenu', () => {
                 ...caseProps,
                 location: Locations.RHS_ROOT,
             };
-            renderWithIntlAndStore(
+            renderWithContext(
                 <DotMenu {...props}/>,
                 initialState,
             );
@@ -286,40 +313,6 @@ describe('components/dot_menu/DotMenu', () => {
             const menuItem = screen.getByTestId(`follow_post_thread_${baseProps.post.id}`);
             expect(menuItem).toBeVisible();
             expect(menuItem).toHaveTextContent(text);
-        });
-
-        test.each([
-            [false, {isFollowingThread: true}],
-            [true, {isFollowingThread: false}],
-        ])('should call setThreadFollow with following as %s', async (following, caseProps) => {
-            const spySetThreadFollow = jest.fn();
-            const spy = jest.spyOn(dotUtils, 'trackDotMenuEvent');
-
-            const props = {
-                ...baseProps,
-                ...caseProps,
-                location: Locations.RHS_ROOT,
-                actions: {
-                    ...baseProps.actions,
-                    setThreadFollow: spySetThreadFollow,
-                },
-            };
-            renderWithIntlAndStore(
-                <DotMenu {...props}/>,
-                initialState,
-            );
-            const button = screen.getByTestId(`PostDotMenu-Button-${baseProps.post.id}`);
-            fireEvent.click(button);
-            const menuItem = screen.getByTestId(`follow_post_thread_${baseProps.post.id}`);
-            expect(menuItem).toBeVisible();
-            fireEvent.mouseDown(menuItem);
-            expect(spy).toHaveBeenCalled();
-            expect(spySetThreadFollow).toHaveBeenCalledWith(
-                'user_id_1',
-                'team_id_1',
-                'post_id_1',
-                following,
-            );
         });
     });
 });

@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/fileutils"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/fileutils"
 
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +69,9 @@ func TestFillImageTransparency(t *testing.T) {
 			inputFile, err := os.Open(imgDir + "/" + tc.inputName)
 			require.NoError(t, err)
 			require.NotNil(t, inputFile)
-			defer inputFile.Close()
+			defer func() {
+				require.NoError(t, inputFile.Close())
+			}()
 
 			inputImg, format, err := d.Decode(inputFile)
 			require.NoError(t, err)
@@ -84,7 +86,6 @@ func TestFillImageTransparency(t *testing.T) {
 			var b bytes.Buffer
 			err = e.EncodePNG(&b, inputImg)
 			require.NoError(t, err)
-
 			require.Equal(t, expectedBytes, b.Bytes())
 		})
 	}
@@ -93,14 +94,17 @@ func TestFillImageTransparency(t *testing.T) {
 		inputFile, err := os.Open(imgDir + "/fill_test_opaque.png")
 		require.NoError(t, err)
 		require.NotNil(t, inputFile)
-		defer inputFile.Close()
+		defer func() {
+			require.NoError(t, inputFile.Close())
+		}()
 
 		inputImg, format, err := d.Decode(inputFile)
 		require.NoError(t, err)
 		require.NotNil(t, inputImg)
 		require.Equal(t, "png", format)
 
-		inputFile.Seek(0, 0)
+		_, err = inputFile.Seek(0, 0)
+		require.NoError(t, err)
 
 		expectedImg, format, err := d.Decode(inputFile)
 		require.NoError(t, err)
@@ -108,7 +112,6 @@ func TestFillImageTransparency(t *testing.T) {
 		require.Equal(t, "png", format)
 
 		FillImageTransparency(inputImg, color.RGBA{0, 255, 0, 255})
-
 		require.Equal(t, expectedImg, inputImg)
 	})
 }

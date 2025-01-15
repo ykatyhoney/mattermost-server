@@ -10,13 +10,14 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/sqlstore"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/testlib"
-	"github.com/mattermost/mattermost-server/v6/server/platform/services/cache"
-	cachemocks "github.com/mattermost/mattermost-server/v6/server/platform/services/cache/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/store/sqlstore"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/testlib"
+	"github.com/mattermost/mattermost/server/v8/platform/services/cache"
+	cachemocks "github.com/mattermost/mattermost/server/v8/platform/services/cache/mocks"
 )
 
 var mainHelper *testlib.MainHelper
@@ -24,11 +25,12 @@ var mainHelper *testlib.MainHelper
 func getMockCacheProvider() cache.Provider {
 	mockCacheProvider := cachemocks.Provider{}
 	mockCacheProvider.On("NewCache", mock.Anything).
-		Return(cache.NewLRU(cache.LRUOptions{Size: 128}), nil)
+		Return(cache.NewLRU(&cache.CacheOptions{Size: 128}), nil)
+	mockCacheProvider.On("Type").Return("lru")
 	return &mockCacheProvider
 }
 
-func getMockStore() *mocks.Store {
+func getMockStore(t *testing.T) *mocks.Store {
 	mockStore := mocks.Store{}
 
 	fakeReaction := model.Reaction{PostId: "123"}
@@ -40,11 +42,13 @@ func getMockStore() *mocks.Store {
 	mockStore.On("Reaction").Return(&mockReactionsStore)
 
 	fakeRole := model.Role{Id: "123", Name: "role-name"}
+	fakeRole2 := model.Role{Id: "456", Name: "role-name2"}
 	mockRolesStore := mocks.RoleStore{}
 	mockRolesStore.On("Save", &fakeRole).Return(&model.Role{}, nil)
 	mockRolesStore.On("Delete", "123").Return(&fakeRole, nil)
 	mockRolesStore.On("GetByName", context.Background(), "role-name").Return(&fakeRole, nil)
 	mockRolesStore.On("GetByNames", []string{"role-name"}).Return([]*model.Role{&fakeRole}, nil)
+	mockRolesStore.On("GetByNames", []string{"role-name2"}).Return([]*model.Role{&fakeRole2}, nil)
 	mockRolesStore.On("PermanentDeleteAll").Return(nil)
 	mockStore.On("Role").Return(&mockRolesStore)
 
@@ -60,6 +64,7 @@ func getMockStore() *mocks.Store {
 	mockFileInfoStore := mocks.FileInfoStore{}
 	mockFileInfoStore.On("GetForPost", "123", true, true, false).Return([]*model.FileInfo{&fakeFileInfo}, nil)
 	mockFileInfoStore.On("GetForPost", "123", true, true, true).Return([]*model.FileInfo{&fakeFileInfo}, nil)
+	mockFileInfoStore.On("GetByIds", []string{"123"}, true, false).Return([]*model.FileInfo{&fakeFileInfo}, nil)
 	mockStore.On("FileInfo").Return(&mockFileInfoStore)
 
 	fakeWebhook := model.IncomingWebhook{Id: "123"}
@@ -69,16 +74,19 @@ func getMockStore() *mocks.Store {
 	mockStore.On("Webhook").Return(&mockWebhookStore)
 
 	fakeEmoji := model.Emoji{Id: "123", Name: "name123"}
+	fakeEmoji2 := model.Emoji{Id: "321", Name: "name321"}
 	ctxEmoji := model.Emoji{Id: "master", Name: "name123"}
 	mockEmojiStore := mocks.EmojiStore{}
 	mockEmojiStore.On("Get", mock.Anything, "123", true).Return(&fakeEmoji, nil)
 	mockEmojiStore.On("Get", mock.Anything, "123", false).Return(&fakeEmoji, nil)
-	mockEmojiStore.On("Get", context.Background(), "master", true).Return(&ctxEmoji, nil)
-	mockEmojiStore.On("Get", sqlstore.WithMaster(context.Background()), "master", true).Return(&ctxEmoji, nil)
+	mockEmojiStore.On("Get", mock.IsType(&request.Context{}), "master", true).Return(&ctxEmoji, nil)
+	mockEmojiStore.On("Get", sqlstore.RequestContextWithMaster(request.TestContext(t)), "master", true).Return(&ctxEmoji, nil)
 	mockEmojiStore.On("GetByName", mock.Anything, "name123", true).Return(&fakeEmoji, nil)
 	mockEmojiStore.On("GetByName", mock.Anything, "name123", false).Return(&fakeEmoji, nil)
-	mockEmojiStore.On("GetByName", context.Background(), "master", true).Return(&ctxEmoji, nil)
-	mockEmojiStore.On("GetByName", sqlstore.WithMaster(context.Background()), "master", false).Return(&ctxEmoji, nil)
+	mockEmojiStore.On("GetMultipleByName", mock.IsType(&request.Context{}), []string{"name123"}).Return([]*model.Emoji{&fakeEmoji}, nil)
+	mockEmojiStore.On("GetMultipleByName", mock.IsType(&request.Context{}), []string{"name123", "name321"}).Return([]*model.Emoji{&fakeEmoji, &fakeEmoji2}, nil)
+	mockEmojiStore.On("GetByName", mock.IsType(&request.Context{}), "master", true).Return(&ctxEmoji, nil)
+	mockEmojiStore.On("GetByName", sqlstore.RequestContextWithMaster(request.TestContext(t)), "master", false).Return(&ctxEmoji, nil)
 	mockEmojiStore.On("Delete", &fakeEmoji, int64(0)).Return(nil)
 	mockEmojiStore.On("Delete", &ctxEmoji, int64(0)).Return(nil)
 	mockStore.On("Emoji").Return(&mockEmojiStore)
@@ -86,16 +94,28 @@ func getMockStore() *mocks.Store {
 	mockCount := int64(10)
 	mockGuestCount := int64(12)
 	channelId := "channel1"
-	fakeChannelId := model.Channel{Id: channelId}
+	fakeChannel1 := model.Channel{Id: channelId, Name: "channel1-name"}
+	fakeChannel2 := model.Channel{Id: "channel2", Name: "channel2-name"}
 	mockChannelStore := mocks.ChannelStore{}
 	mockChannelStore.On("ClearCaches").Return()
 	mockChannelStore.On("GetMemberCount", "id", true).Return(mockCount, nil)
 	mockChannelStore.On("GetMemberCount", "id", false).Return(mockCount, nil)
 	mockChannelStore.On("GetGuestCount", "id", true).Return(mockGuestCount, nil)
 	mockChannelStore.On("GetGuestCount", "id", false).Return(mockGuestCount, nil)
-	mockChannelStore.On("Get", channelId, true).Return(&fakeChannelId, nil)
-	mockChannelStore.On("Get", channelId, false).Return(&fakeChannelId, nil)
+	mockChannelStore.On("Get", channelId, true).Return(&fakeChannel1, nil)
+	mockChannelStore.On("Get", channelId, false).Return(&fakeChannel1, nil)
+	mockChannelStore.On("GetMany", []string{channelId}, true).Return(model.ChannelList{&fakeChannel1}, nil)
+	mockChannelStore.On("GetMany", []string{channelId}, false).Return(model.ChannelList{&fakeChannel1}, nil)
+	mockChannelStore.On("GetMany", []string{fakeChannel2.Id}, true).Return(model.ChannelList{&fakeChannel2}, nil)
+	mockChannelStore.On("GetByNames", "team1", []string{fakeChannel1.Name}, true).Return([]*model.Channel{&fakeChannel1}, nil)
+	mockChannelStore.On("GetByNames", "team1", []string{fakeChannel2.Name}, true).Return([]*model.Channel{&fakeChannel2}, nil)
 	mockStore.On("Channel").Return(&mockChannelStore)
+
+	mockChannelsMemberCount := map[string]int64{
+		"channel1": 10,
+		"channel2": 20,
+	}
+	mockChannelStore.On("GetChannelsMemberCount", []string{"channel1", "channel2"}).Return(mockChannelsMemberCount, nil)
 
 	mockPinnedPostsCount := int64(10)
 	mockChannelStore.On("GetPinnedPostCount", "id", true).Return(mockPinnedPostsCount, nil)
@@ -135,7 +155,7 @@ func getMockStore() *mocks.Store {
 
 	fakeUser := []*model.User{{
 		Id:          "123",
-		AuthData:    model.NewString("authData"),
+		AuthData:    model.NewPointer("authData"),
 		AuthService: "authService",
 	}}
 	mockUserStore := mocks.UserStore{}
@@ -147,13 +167,14 @@ func getMockStore() *mocks.Store {
 	}
 	mockUserStore.On("GetAllProfilesInChannel", mock.Anything, "123", true).Return(fakeProfilesInChannelMap, nil)
 	mockUserStore.On("GetAllProfilesInChannel", mock.Anything, "123", false).Return(fakeProfilesInChannelMap, nil)
+	mockUserStore.On("GetAllProfiles", mock.AnythingOfType("*model.UserGetOptions")).Return(fakeUser, nil)
 
 	mockUserStore.On("Get", mock.Anything, "123").Return(fakeUser[0], nil)
 	users := []*model.User{
 		fakeUser[0],
 		{
 			Id:          "456",
-			AuthData:    model.NewString("authData"),
+			AuthData:    model.NewPointer("authData"),
 			AuthService: "authService",
 		},
 	}
@@ -174,7 +195,7 @@ func TestMain(m *testing.M) {
 	mainHelper = testlib.NewMainHelperWithOptions(nil)
 	defer mainHelper.Close()
 
-	initStores()
+	initStores(mainHelper.Logger)
 	mainHelper.Main(m)
 	tearDownStores()
 }

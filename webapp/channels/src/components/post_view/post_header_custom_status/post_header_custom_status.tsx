@@ -2,16 +2,17 @@
 // See LICENSE.txt for license information.
 
 import React, {useMemo} from 'react';
-
-import {useDispatch, useSelector} from 'react-redux';
-
 import {FormattedMessage} from 'react-intl';
+import {useSelector} from 'react-redux';
 
-import {setStatusDropdown} from 'actions/views/status_dropdown';
-import CustomStatusEmoji from 'components/custom_status/custom_status_emoji';
 import {makeGetCustomStatus, showPostHeaderUpdateStatusButton, isCustomStatusEnabled} from 'selectors/views/custom_status';
-import {GlobalState} from 'types/store';
+
+import CustomStatusEmoji from 'components/custom_status/custom_status_emoji';
 import EmojiIcon from 'components/widgets/icons/emoji_icon';
+
+import {clickOnMenuButton, MenuButtonIds} from 'utils/keyboard';
+
+import type {GlobalState} from 'types/store';
 
 interface ComponentProps {
     userId: string;
@@ -22,7 +23,6 @@ interface ComponentProps {
 const PostHeaderCustomStatus = (props: ComponentProps) => {
     const getCustomStatus = useMemo(makeGetCustomStatus, []);
     const {userId, isSystemMessage, isBot} = props;
-    const dispatch = useDispatch();
     const userCustomStatus = useSelector((state: GlobalState) => getCustomStatus(state, userId));
     const showUpdateStatusButton = useSelector(showPostHeaderUpdateStatusButton);
     const customStatusEnabled = useSelector(isCustomStatusEnabled);
@@ -51,7 +51,7 @@ const PostHeaderCustomStatus = (props: ComponentProps) => {
 
     const updateStatus = (event: React.MouseEvent) => {
         event.preventDefault();
-        dispatch(setStatusDropdown(true));
+        clickOnMenuButton(MenuButtonIds.userAccountMenu);
     };
 
     return (

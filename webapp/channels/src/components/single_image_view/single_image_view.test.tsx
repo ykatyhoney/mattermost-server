@@ -1,11 +1,12 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
 
 import SingleImageView from 'components/single_image_view/single_image_view';
 import SizeAwareImage from 'components/size_aware_image';
+
 import {TestHelper} from 'utils/test_helper';
 
 describe('components/SingleImageView', () => {
@@ -56,7 +57,7 @@ describe('components/SingleImageView', () => {
             <SingleImageView {...baseProps}/>,
         );
 
-        wrapper.find('SizeAwareImage').at(0).simulate('click', {preventDefault: () => {}});
+        wrapper.find(SizeAwareImage).at(0).simulate('click', {preventDefault: () => { }});
         expect(baseProps.actions.openModal).toHaveBeenCalledTimes(1);
     });
 
@@ -74,7 +75,10 @@ describe('components/SingleImageView', () => {
         );
 
         const instance = wrapper.instance() as SingleImageView;
-        instance.toggleEmbedVisibility();
+        const event = {
+            stopPropagation: jest.fn(),
+        } as unknown as React.MouseEvent<HTMLButtonElement>;
+        instance.toggleEmbedVisibility(event);
         expect(props.actions.toggleEmbedVisibility).toHaveBeenCalledTimes(1);
         expect(props.actions.toggleEmbedVisibility).toBeCalledWith('original_post_id');
     });
@@ -84,7 +88,7 @@ describe('components/SingleImageView', () => {
             <SingleImageView {...baseProps}/>,
         );
         expect(wrapper.state('loaded')).toEqual(false);
-        wrapper.find(SizeAwareImage).prop('onImageLoaded')();
+        wrapper.find(SizeAwareImage).prop('onImageLoaded')?.({height: 0, width: 0});
         expect(wrapper.state('loaded')).toEqual(true);
         expect(wrapper).toMatchSnapshot();
     });

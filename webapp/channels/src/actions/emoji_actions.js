@@ -2,37 +2,31 @@
 // See LICENSE.txt for license information.
 
 import * as EmojiActions from 'mattermost-redux/actions/emojis';
-import {getCustomEmojisByName} from 'mattermost-redux/selectors/entities/emojis';
-import {getConfig} from 'mattermost-redux/selectors/entities/general';
+import {savePreferences} from 'mattermost-redux/actions/preferences';
+import {Preferences as ReduxPreferences} from 'mattermost-redux/constants';
+import {getCustomEmojisByName as selectCustomEmojisByName, getCustomEmojisEnabled} from 'mattermost-redux/selectors/entities/emojis';
+import {get} from 'mattermost-redux/selectors/entities/preferences';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
+import {getEmojiName} from 'mattermost-redux/utils/emoji_utils';
 
 import {getEmojiMap, getRecentEmojisData, getRecentEmojisNames, isCustomEmojiEnabled} from 'selectors/emojis';
 import {isCustomStatusEnabled, makeGetCustomStatus} from 'selectors/views/custom_status';
-import {savePreferences} from 'mattermost-redux/actions/preferences';
-
 import LocalStorageStore from 'stores/local_storage_store';
 
 import Constants, {ActionTypes, Preferences} from 'utils/constants';
 import {EmojiIndicesByAlias} from 'utils/emoji';
 
 export function loadRecentlyUsedCustomEmojis() {
-    return async (dispatch, getState) => {
+    return (dispatch, getState) => {
         const state = getState();
-        const config = getConfig(state);
 
-        if (config.EnableCustomEmoji !== 'true') {
+        if (!getCustomEmojisEnabled(state)) {
             return {data: true};
         }
 
-        const recentEmojis = getRecentEmojisNames(state);
-        const emojiMap = getEmojiMap(state);
-        const missingEmojis = recentEmojis.filter((name) => !emojiMap.has(name));
+        const recentEmojiNames = getRecentEmojisNames(state);
 
-        missingEmojis.forEach((name) => {
-            dispatch(EmojiActions.getCustomEmojiByName(name));
-        });
-
-        return {data: true};
+        return dispatch(EmojiActions.getCustomEmojisByName(recentEmojiNames));
     };
 }
 
@@ -60,43 +54,46 @@ export function setUserSkinTone(skin) {
     };
 }
 
+export function addRecentEmoji(alias) {
+    return addRecentEmojis([alias]);
+}
+
 export const MAXIMUM_RECENT_EMOJI = 27;
 
-export function addRecentEmoji(alias) {
+export function addRecentEmojis(aliases) {
     return (dispatch, getState) => {
         const state = getState();
         const currentUserId = getCurrentUserId(state);
         const recentEmojis = getRecentEmojisData(state);
         const emojiMap = getEmojiMap(state);
 
-        let name;
-        const emoji = emojiMap.get(alias);
-        if (!emoji) {
-            return {data: false};
-        } else if (emoji.short_name) {
-            name = emoji.short_name;
-        } else {
-            name = emoji.name;
-        }
+        let updatedRecentEmojis = [...recentEmojis];
+        for (const alias of aliases) {
+            const emoji = emojiMap.get(alias);
+            if (!emoji) {
+                continue;
+            }
 
-        let updatedRecentEmojis;
-        const currentEmojiIndexInRecentList = recentEmojis.findIndex((recentEmoji) => recentEmoji.name === name);
-        if (currentEmojiIndexInRecentList > -1) {
-            const currentEmojiInRecentList = recentEmojis[currentEmojiIndexInRecentList];
+            const name = getEmojiName(emoji);
 
-            // If the emoji is already in the recent list, remove it and add it to the front with updated usage count
-            const updatedCurrentEmojiData = {
-                name,
-                usageCount: currentEmojiInRecentList.usageCount + 1,
-            };
-            recentEmojis.splice(currentEmojiIndexInRecentList, 1);
-            updatedRecentEmojis = [...recentEmojis, updatedCurrentEmojiData].slice(-MAXIMUM_RECENT_EMOJI);
-        } else {
-            const currentEmojiData = {
-                name,
-                usageCount: 1,
-            };
-            updatedRecentEmojis = [...recentEmojis, currentEmojiData].slice(-MAXIMUM_RECENT_EMOJI);
+            const currentEmojiIndexInRecentList = updatedRecentEmojis.findIndex((recentEmoji) => recentEmoji.name === name);
+            if (currentEmojiIndexInRecentList > -1) {
+                const currentEmojiInRecentList = updatedRecentEmojis[currentEmojiIndexInRecentList];
+
+                // If the emoji is already in the recent list, remove it and add it to the front with updated usage count
+                const updatedCurrentEmojiData = {
+                    name,
+                    usageCount: currentEmojiInRecentList.usageCount + 1,
+                };
+                updatedRecentEmojis.splice(currentEmojiIndexInRecentList, 1);
+                updatedRecentEmojis = [...updatedRecentEmojis, updatedCurrentEmojiData].slice(-MAXIMUM_RECENT_EMOJI);
+            } else {
+                const currentEmojiData = {
+                    name,
+                    usageCount: 1,
+                };
+                updatedRecentEmojis = [...updatedRecentEmojis, currentEmojiData].slice(-MAXIMUM_RECENT_EMOJI);
+            }
         }
 
         // sort emojis by count in the ascending order
@@ -135,6 +132,35 @@ export function loadCustomEmojisForCustomStatusesByUserIds(userIds) {
     };
 }
 
+export function loadCustomEmojisForRecentCustomStatuses() {
+    return (dispatch, getState) => {
+        const state = getState();
+        const customEmojiEnabled = isCustomEmojiEnabled(state);
+        const customStatusEnabled = isCustomStatusEnabled(state);
+        if (!customEmojiEnabled || !customStatusEnabled) {
+            return {data: false};
+        }
+
+        const recentCustomStatusesValue = get(state, ReduxPreferences.CATEGORY_CUSTOM_STATUS, ReduxPreferences.NAME_RECENT_CUSTOM_STATUSES);
+        if (!recentCustomStatusesValue) {
+            return {data: false};
+        }
+
+        const recentCustomStatuses = JSON.parse(recentCustomStatusesValue);
+        const emojisToLoad = new Set();
+
+        for (const customStatus of recentCustomStatuses) {
+            if (!customStatus || !customStatus.emoji) {
+                continue;
+            }
+
+            emojisToLoad.add(customStatus.emoji);
+        }
+
+        return dispatch(loadCustomEmojisIfNeeded(Array.from(emojisToLoad)));
+    };
+}
+
 export function loadCustomEmojisIfNeeded(emojis) {
     return (dispatch, getState) => {
         if (!emojis || emojis.length === 0) {
@@ -148,7 +174,7 @@ export function loadCustomEmojisIfNeeded(emojis) {
         }
 
         const systemEmojis = EmojiIndicesByAlias;
-        const customEmojisByName = getCustomEmojisByName(state);
+        const customEmojisByName = selectCustomEmojisByName(state);
         const nonExistentCustomEmoji = state.entities.emojis.nonExistentEmoji;
         const emojisToLoad = [];
 

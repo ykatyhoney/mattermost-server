@@ -9,8 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
 )
 
 func TestTeamStore(t *testing.T) {
@@ -20,11 +21,12 @@ func TestTeamStore(t *testing.T) {
 func TestTeamStoreCache(t *testing.T) {
 	fakeUserId := "123"
 	fakeUserTeamIds := []string{"1", "2", "3"}
+	logger := mlog.CreateConsoleTestLogger(t)
 
 	t.Run("first call not cached, second cached and returning same data", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotUserTeamIds, err := cachedStore.Team().GetUserTeamIds(fakeUserId, true)
@@ -39,9 +41,9 @@ func TestTeamStoreCache(t *testing.T) {
 	})
 
 	t.Run("first call not cached, second force not cached", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotUserTeamIds, err := cachedStore.Team().GetUserTeamIds(fakeUserId, true)
@@ -56,9 +58,9 @@ func TestTeamStoreCache(t *testing.T) {
 	})
 
 	t.Run("first call not cached, invalidate, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotUserTeamIds, err := cachedStore.Team().GetUserTeamIds(fakeUserId, true)
@@ -73,5 +75,4 @@ func TestTeamStoreCache(t *testing.T) {
 		assert.Equal(t, fakeUserTeamIds, gotUserTeamIds)
 		mockStore.Team().(*mocks.TeamStore).AssertNumberOfCalls(t, "GetUserTeamIds", 2)
 	})
-
 }

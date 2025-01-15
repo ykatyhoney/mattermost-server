@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestDownloadFromURL(t *testing.T) {
@@ -19,7 +19,7 @@ func TestDownloadFromURL(t *testing.T) {
 	defer th.TearDown()
 
 	app := th.App
-	app.Config().PluginSettings.AllowInsecureDownloadURL = model.NewBool(true)
+	app.Config().PluginSettings.AllowInsecureDownloadURL = model.NewPointer(true)
 
 	// To keep track of how many times an endpoint is retried. This needs to be reset
 	// for each test run.

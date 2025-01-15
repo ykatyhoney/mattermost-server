@@ -5,27 +5,24 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useIntl} from 'react-intl';
 import {useSelector, useDispatch} from 'react-redux';
 
-import {trackEvent} from 'actions/telemetry_actions';
+import {GenericModal} from '@mattermost/components';
 
-import {ConsolePages, ModalIdentifiers, TELEMETRY_CATEGORIES} from 'utils/constants';
-
-import Carousel from 'components/common/carousel/carousel';
-import GenericModal from 'components/generic_modal';
-import GuestAccessSvg from 'components/common/svg_images_components/guest_access_svg';
-import MonitorImacLikeSVG from 'components/common/svg_images_components/monitor_imaclike_svg';
-import SystemRolesSVG from 'components/admin_console/feature_discovery/features/images/system_roles_svg';
-import CloudStartTrialButton from 'components/cloud_start_trial/cloud_start_trial_btn';
-import {BtnStyle} from 'components/common/carousel/carousel_button';
-
-import {closeModal} from 'actions/views/modals';
-import {DispatchFunc} from 'mattermost-redux/types/actions';
 import {getLicense} from 'mattermost-redux/selectors/entities/general';
 
+import {trackEvent} from 'actions/telemetry_actions';
+import {closeModal} from 'actions/views/modals';
+
+import SystemRolesSVG from 'components/admin_console/feature_discovery/features/images/system_roles_svg';
+import Carousel from 'components/common/carousel/carousel';
+import {BtnStyle} from 'components/common/carousel/carousel_button';
+import GuestAccessSvg from 'components/common/svg_images_components/guest_access_svg';
+import MonitorImacLikeSVG from 'components/common/svg_images_components/monitor_imaclike_svg';
+
+import {ConsolePages, DocLinks, ModalIdentifiers, TELEMETRY_CATEGORIES} from 'utils/constants';
+
+import LearnMoreTrialModalStep from './learn_more_trial_modal_step';
+import type {LearnMoreTrialModalStepProps} from './learn_more_trial_modal_step';
 import StartTrialBtn from './start_trial_btn';
-
-import LearnMoreTrialModalStep, {LearnMoreTrialModalStepProps} from './learn_more_trial_modal_step';
-
-import './learn_more_trial_modal.scss';
 
 type Props = {
     onClose?: () => void;
@@ -41,7 +38,7 @@ const LearnMoreTrialModal = (
     }: Props): JSX.Element | null => {
     const {formatMessage} = useIntl();
     const [embargoed, setEmbargoed] = useState(false);
-    const dispatch = useDispatch<DispatchFunc>();
+    const dispatch = useDispatch();
 
     // Cloud conditions
     const license = useSelector(getLicense);
@@ -51,34 +48,18 @@ const LearnMoreTrialModal = (
         setEmbargoed(true);
     }, []);
 
-    let startTrialBtnMsg = formatMessage({id: 'start_trial.modal_btn.start_free_trial', defaultMessage: 'Start free 30-day trial'});
-
     // close this modal once start trial btn is clicked and trial has started successfully
     const dismissAction = useCallback(() => {
         dispatch(closeModal(ModalIdentifiers.LEARN_MORE_TRIAL_MODAL));
     }, []);
 
-    let startTrialBtn = (
+    const startTrialBtn = (
         <StartTrialBtn
-            message={startTrialBtnMsg}
             handleEmbargoError={handleEmbargoError}
             telemetryId={`start_trial__learn_more_modal__${launchedBy}`}
             onClick={dismissAction}
         />
     );
-
-    // no need to check if is cloud trial or if it have had prev cloud trial because the button that show this modal takes care of that
-    if (isCloud) {
-        startTrialBtnMsg = formatMessage({id: 'trial_btn.free.tryFreeFor30Days', defaultMessage: 'Start trial'});
-        startTrialBtn = (
-            <CloudStartTrialButton
-                message={startTrialBtnMsg}
-                telemetryId={`start_cloud_trial__learn_more_modal__${launchedBy}`}
-                onClick={dismissAction}
-                extraClass={'btn btn-primary start-cloud-trial-btn'}
-            />
-        );
-    }
 
     const handleOnClose = useCallback(() => {
         if (onClose) {
@@ -109,7 +90,7 @@ const LearnMoreTrialModal = (
                     height={180}
                 />
             ),
-            pageURL: 'https://docs.mattermost.com/onboard/sso-saml.html',
+            pageURL: DocLinks.SETUP_SAML,
             buttonLabel,
         },
         {
@@ -123,13 +104,13 @@ const LearnMoreTrialModal = (
                     height={180}
                 />
             ),
-            pageURL: 'https://docs.mattermost.com/onboard/ad-ldap.html',
+            pageURL: DocLinks.SETUP_LDAP,
             buttonLabel,
         },
         {
             id: 'systemConsole',
             title: formatMessage({id: 'learn_more_about_trial.modal.systemConsoleTitle', defaultMessage: 'Provide controlled access to the System Console'}),
-            description: formatMessage({id: 'learn_more_about_trial.modal.systemConsoleDescription', defaultMessage: 'Use System Roles to give designated users read and/or write access to select sections of System Console.'}),
+            description: formatMessage({id: 'learn_more_about_trial.modal.systemConsoleDescription', defaultMessage: 'Assign customizable admin roles to give designated users read and/or write access to select sections of System Console.'}),
             svgWrapperClassName: 'personBoxSvg',
             svgElement: (
                 <SystemRolesSVG
@@ -167,8 +148,14 @@ const LearnMoreTrialModal = (
 
     const headerText = formatMessage({id: 'learn_more_trial_modal.pretitle', defaultMessage: 'With Enterprise, you can...'});
 
+    if (isCloud) {
+        // Cloud users shouldn't be able to reach this modal, but in case they do, return nothing.
+        return null;
+    }
+
     return (
         <GenericModal
+            compassDesign={true}
             className='LearnMoreTrialModal'
             id='learnMoreTrialModal'
             onExited={handleOnClose}

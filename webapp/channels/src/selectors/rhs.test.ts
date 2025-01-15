@@ -2,7 +2,8 @@
 // See LICENSE.txt for license information.
 
 import * as Selectors from 'selectors/rhs';
-import {GlobalState} from 'types/store';
+
+import type {GlobalState} from 'types/store';
 
 describe('Selectors.Rhs', () => {
     describe('should return the last time a post was selected', () => {
@@ -62,6 +63,24 @@ describe('Selectors.Rhs', () => {
                     previousRhsStates: previousArray,
                 }}} as GlobalState;
             expect(Selectors.getPreviousRhsState(state)).toEqual(previous);
+        });
+    });
+
+    describe('should return the search team', () => {
+        test.each([
+            [undefined, 'currentTeamId'],
+            [null, 'currentTeamId'],
+            ['', ''],
+            ['searchTeamId', 'searchTeamId'],
+        ])('%p gives %p', (searchTeam, expected) => {
+            const state = {
+                entities: {teams: {currentTeamId: 'currentTeamId'}},
+                views: {rhs: {
+                    searchTeam,
+                }} as any,
+            } as GlobalState;
+
+            expect(Selectors.getSearchTeam(state)).toEqual(expected);
         });
     });
 });

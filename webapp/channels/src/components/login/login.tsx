@@ -1,60 +1,59 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useState, useEffect, useRef, useCallback} from 'react';
-import {useIntl} from 'react-intl';
-import {Link, useLocation, useHistory} from 'react-router-dom';
-import {useSelector, useDispatch} from 'react-redux';
 import classNames from 'classnames';
 import throttle from 'lodash/throttle';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
+import type {FormEvent} from 'react';
+import {useIntl} from 'react-intl';
+import {useSelector, useDispatch} from 'react-redux';
+import {Link, useLocation, useHistory, Route} from 'react-router-dom';
 
-import {Team} from '@mattermost/types/teams';
-import {UserProfile} from '@mattermost/types/users';
+import type {Team} from '@mattermost/types/teams';
 
+import {loadMe} from 'mattermost-redux/actions/users';
 import {Client4} from 'mattermost-redux/client';
+import {RequestStatus} from 'mattermost-redux/constants';
 import {getConfig, getLicense} from 'mattermost-redux/selectors/entities/general';
-import {getUseCaseOnboarding, isGraphQLEnabled} from 'mattermost-redux/selectors/entities/preferences';
+import {getIsOnboardingFlowEnabled} from 'mattermost-redux/selectors/entities/preferences';
 import {getTeamByName, getMyTeamMember} from 'mattermost-redux/selectors/entities/teams';
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
-import {isSystemAdmin} from 'mattermost-redux/utils/user_utils';
-
-import {isCurrentLicenseCloud} from 'mattermost-redux/selectors/entities/cloud';
-import {RequestStatus} from 'mattermost-redux/constants';
-import {DispatchFunc} from 'mattermost-redux/types/actions';
-import {loadMe, loadMeREST} from 'mattermost-redux/actions/users';
-
-import LocalStorageStore from 'stores/local_storage_store';
 
 import {redirectUserToDefaultTeam} from 'actions/global_actions';
 import {addUserToTeamFromInvite} from 'actions/team_actions';
-import {login} from 'actions/views/login';
-import {setNeedsLoggedInLimitReachedCheck} from 'actions/views/admin';
 import {trackEvent} from 'actions/telemetry_actions';
+import {login} from 'actions/views/login';
+import LocalStorageStore from 'stores/local_storage_store';
 
-import AlertBanner, {ModeType, AlertBannerProps} from 'components/alert_banner';
-import ExternalLoginButton, {ExternalLoginButtonType} from 'components/external_login_button/external_login_button';
+import AlertBanner from 'components/alert_banner';
+import type {ModeType, AlertBannerProps} from 'components/alert_banner';
+import type {SubmitOptions} from 'components/claim/components/email_to_ldap';
+import DesktopAuthToken from 'components/desktop_auth_token';
+import ExternalLink from 'components/external_link';
+import ExternalLoginButton from 'components/external_login_button/external_login_button';
+import type {ExternalLoginButtonType} from 'components/external_login_button/external_login_button';
 import AlternateLinkLayout from 'components/header_footer_route/content_layouts/alternate_link';
 import ColumnLayout from 'components/header_footer_route/content_layouts/column';
-import {CustomizeHeaderType} from 'components/header_footer_route/header_footer_route';
+import type {CustomizeHeaderType} from 'components/header_footer_route/header_footer_route';
 import LoadingScreen from 'components/loading_screen';
 import Markdown from 'components/markdown';
 import SaveButton from 'components/save_button';
+import EntraIdIcon from 'components/widgets/icons/entra_id_icon';
 import LockIcon from 'components/widgets/icons/lock_icon';
-import LoginGoogleIcon from 'components/widgets/icons/login_google_icon';
 import LoginGitlabIcon from 'components/widgets/icons/login_gitlab_icon';
-import LoginOffice365Icon from 'components/widgets/icons/login_office_365_icon';
+import LoginGoogleIcon from 'components/widgets/icons/login_google_icon';
 import LoginOpenIDIcon from 'components/widgets/icons/login_openid_icon';
 import Input, {SIZE} from 'components/widgets/inputs/input/input';
 import PasswordInput from 'components/widgets/inputs/password_input/password_input';
-import WomanWithChatsSVG from 'components/common/svg_images_components/woman_with_chats_svg';
-import {SubmitOptions} from 'components/claim/components/email_to_ldap';
-
-import {GlobalState} from 'types/store';
 
 import Constants from 'utils/constants';
-import {showNotification} from 'utils/notifications';
+import DesktopApp from 'utils/desktop_api';
 import {t} from 'utils/i18n';
+import {showNotification} from 'utils/notifications';
+import {isDesktopApp} from 'utils/user_agent';
 import {setCSRFFromCookie} from 'utils/utils';
+
+import type {GlobalState} from 'types/store';
 
 import LoginMfa from './login_mfa';
 
@@ -68,7 +67,7 @@ type LoginProps = {
 
 const Login = ({onCustomizeHeader}: LoginProps) => {
     const {formatMessage} = useIntl();
-    const dispatch = useDispatch<DispatchFunc>();
+    const dispatch = useDispatch();
     const history = useHistory();
     const {pathname, search, hash} = useLocation();
 
@@ -87,6 +86,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
         EnableSignUpWithGoogle,
         EnableSignUpWithOpenId,
         EnableOpenServer,
+        EnableUserCreation,
         LdapLoginFieldName,
         GitLabButtonText,
         GitLabButtonColor,
@@ -98,15 +98,15 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
         CustomDescriptionText,
         SiteName,
         ExperimentalPrimaryTeam,
+        ForgotPasswordLink,
+        PasswordEnableForgotLink,
     } = useSelector(getConfig);
     const {IsLicensed} = useSelector(getLicense);
     const initializing = useSelector((state: GlobalState) => state.requests.users.logout.status === RequestStatus.SUCCESS || !state.storage.initialized);
     const currentUser = useSelector(getCurrentUser);
     const experimentalPrimaryTeam = useSelector((state: GlobalState) => (ExperimentalPrimaryTeam ? getTeamByName(state, ExperimentalPrimaryTeam) : undefined));
-    const experimentalPrimaryTeamMember = useSelector((state: GlobalState) => getMyTeamMember(state, experimentalPrimaryTeam?.id ?? ''));
-    const useCaseOnboarding = useSelector(getUseCaseOnboarding);
-    const isCloud = useSelector(isCurrentLicenseCloud);
-    const graphQLEnabled = useSelector(isGraphQLEnabled);
+    const experimentalPrimaryTeamMember = useSelector((state: GlobalState) => (experimentalPrimaryTeam ? getMyTeamMember(state, experimentalPrimaryTeam.id) : undefined));
+    const onboardingFlowEnabled = useSelector(getIsOnboardingFlowEnabled);
 
     const loginIdInput = useRef<HTMLInputElement>(null);
     const passwordInput = useRef<HTMLInputElement>(null);
@@ -125,10 +125,11 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     const enableCustomBrand = EnableCustomBrand === 'true';
     const enableLdap = EnableLdap === 'true';
     const enableOpenServer = EnableOpenServer === 'true';
+    const enableUserCreation = EnableUserCreation === 'true';
     const enableSaml = EnableSaml === 'true';
     const enableSignInWithEmail = EnableSignInWithEmail === 'true';
     const enableSignInWithUsername = EnableSignInWithUsername === 'true';
-    const enableSignUpWithEmail = EnableSignUpWithEmail === 'true';
+    const enableSignUpWithEmail = enableUserCreation && EnableSignUpWithEmail === 'true';
     const enableSignUpWithGitLab = EnableSignUpWithGitLab === 'true';
     const enableSignUpWithGoogle = EnableSignUpWithGoogle === 'true';
     const enableSignUpWithOffice365 = EnableSignUpWithOffice365 === 'true';
@@ -141,6 +142,12 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     const enableBaseLogin = enableSignInWithEmail || enableSignInWithUsername || ldapEnabled;
     const enableExternalSignup = enableSignUpWithGitLab || enableSignUpWithOffice365 || enableSignUpWithGoogle || enableSignUpWithOpenId || enableSignUpWithSaml;
     const showSignup = enableOpenServer && (enableExternalSignup || enableSignUpWithEmail || enableLdap);
+    const onlyLdapEnabled = enableLdap && !(enableSaml || enableSignInWithEmail || enableSignInWithUsername || enableSignUpWithEmail || enableSignUpWithGitLab || enableSignUpWithGoogle || enableSignUpWithOffice365 || enableSignUpWithOpenId);
+
+    const query = new URLSearchParams(search);
+    const redirectTo = query.get('redirect_to');
+
+    const [desktopLoginLink, setDesktopLoginLink] = useState('');
 
     const getExternalLoginOptions = () => {
         const externalLoginOptions: ExternalLoginButtonType[] = [];
@@ -150,53 +157,74 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
         }
 
         if (enableSignUpWithGitLab) {
+            const url = `${Client4.getOAuthRoute()}/gitlab/login${search}`;
             externalLoginOptions.push({
                 id: 'gitlab',
-                url: `${Client4.getOAuthRoute()}/gitlab/login${search}`,
+                url,
                 icon: <LoginGitlabIcon/>,
                 label: GitLabButtonText || formatMessage({id: 'login.gitlab', defaultMessage: 'GitLab'}),
                 style: {color: GitLabButtonColor, borderColor: GitLabButtonColor},
+                onClick: desktopExternalAuth(url),
             });
         }
 
         if (enableSignUpWithGoogle) {
+            const url = `${Client4.getOAuthRoute()}/google/login${search}`;
             externalLoginOptions.push({
                 id: 'google',
-                url: `${Client4.getOAuthRoute()}/google/login${search}`,
+                url,
                 icon: <LoginGoogleIcon/>,
                 label: formatMessage({id: 'login.google', defaultMessage: 'Google'}),
+                onClick: desktopExternalAuth(url),
             });
         }
 
         if (enableSignUpWithOffice365) {
+            const url = `${Client4.getOAuthRoute()}/office365/login${search}`;
             externalLoginOptions.push({
                 id: 'office365',
-                url: `${Client4.getOAuthRoute()}/office365/login${search}`,
-                icon: <LoginOffice365Icon/>,
-                label: formatMessage({id: 'login.office365', defaultMessage: 'Office 365'}),
+                url,
+                icon: <EntraIdIcon/>,
+                label: formatMessage({id: 'login.office365', defaultMessage: 'Entra ID'}),
+                onClick: desktopExternalAuth(url),
             });
         }
 
         if (enableSignUpWithOpenId) {
+            const url = `${Client4.getOAuthRoute()}/openid/login${search}`;
             externalLoginOptions.push({
                 id: 'openid',
-                url: `${Client4.getOAuthRoute()}/openid/login${search}`,
+                url,
                 icon: <LoginOpenIDIcon/>,
                 label: OpenIdButtonText || formatMessage({id: 'login.openid', defaultMessage: 'Open ID'}),
                 style: {color: OpenIdButtonColor, borderColor: OpenIdButtonColor},
+                onClick: desktopExternalAuth(url),
             });
         }
 
         if (enableSignUpWithSaml) {
+            const url = `${Client4.getUrl()}/login/sso/saml${search}`;
             externalLoginOptions.push({
                 id: 'saml',
-                url: `${Client4.getUrl()}/login/sso/saml${search}`,
+                url,
                 icon: <LockIcon/>,
                 label: SamlLoginButtonText || formatMessage({id: 'login.saml', defaultMessage: 'SAML'}),
+                onClick: desktopExternalAuth(url),
             });
         }
 
         return externalLoginOptions;
+    };
+
+    const desktopExternalAuth = (href: string) => {
+        return (event: React.MouseEvent) => {
+            if (isDesktopApp()) {
+                event.preventDefault();
+
+                setDesktopLoginLink(href);
+                history.push(`/login/desktop${search}`);
+            }
+        };
     };
 
     const dismissAlert = () => {
@@ -207,6 +235,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     const onDismissSessionExpired = useCallback(() => {
         LocalStorageStore.setWasLoggedIn(false);
         setSessionExpired(false);
+        DesktopApp.setSessionExpired(false);
         dismissAlert();
     }, []);
 
@@ -224,7 +253,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
 
     const showSessionExpiredNotificationIfNeeded = useCallback(() => {
         if (sessionExpired && !closeSessionExpiredNotification!.current) {
-            showNotification({
+            dispatch(showNotification({
                 title: siteName,
                 body: formatMessage({
                     id: 'login.session_expired.notification',
@@ -239,7 +268,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
                         closeSessionExpiredNotification.current = undefined;
                     }
                 },
-            }).then((closeNotification) => {
+            })).then(({callback: closeNotification}) => {
                 closeSessionExpiredNotification.current = closeNotification;
             }).catch(() => {
                 // Ignore the failure to display the notification.
@@ -357,8 +386,6 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     const onWindowFocus = useCallback(() => {
         if (extraParam === Constants.SIGNIN_VERIFIED && emailParam) {
             passwordInput.current?.focus();
-        } else {
-            loginIdInput.current?.focus();
         }
     }, [emailParam, extraParam]);
 
@@ -372,7 +399,16 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     }, [onCustomizeHeader, search, showMfa, isMobileView, getAlternateLink]);
 
     useEffect(() => {
+        // We don't want to redirect outside of this route if we're doing Desktop App auth
+        if (query.get('server_token')) {
+            return;
+        }
+
         if (currentUser) {
+            if (redirectTo && redirectTo.match(/^\/([^/]|$)/)) {
+                history.push(redirectTo);
+                return;
+            }
             redirectUserToDefaultTeam();
             return;
         }
@@ -391,9 +427,12 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
                 // our session after we use it to complete the sign in change.
                 LocalStorageStore.setWasLoggedIn(false);
             } else {
+                setSessionExpired(true);
+                DesktopApp.setSessionExpired(true);
+
                 // Although the authority remains the local sessionExpired bit on the state, set this
                 // extra field in the querystring to signal the desktop app.
-                setSessionExpired(true);
+                // This is legacy support for older Desktop Apps and can be removed eventually
                 const newSearchParam = new URLSearchParams(search);
                 newSearchParam.set('extra', Constants.SESSION_EXPIRED);
                 history.replace(`${pathname}?${newSearchParam}`);
@@ -416,6 +455,8 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
 
             window.removeEventListener('resize', onWindowResize);
             window.removeEventListener('focus', onWindowFocus);
+
+            DesktopApp.setSessionExpired(false);
         };
     }, []);
 
@@ -532,7 +573,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
     const submit = async ({loginId, password, token}: SubmitOptions) => {
         setIsWaiting(true);
 
-        const {data: userProfile, error: loginError} = await dispatch(login(loginId, password, token));
+        const {error: loginError} = await dispatch(login(loginId, password, token));
 
         if (loginError && loginError.server_error_id && loginError.server_error_id.length !== 0) {
             if (loginError.server_error_id === 'api.user.login.not_verified.app_error') {
@@ -586,11 +627,11 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
             return;
         }
 
-        if (graphQLEnabled) {
-            await dispatch(loadMe());
-        } else {
-            await dispatch(loadMeREST());
-        }
+        await postSubmit();
+    };
+
+    const postSubmit = async () => {
+        await dispatch(loadMe());
 
         // check for query params brought over from signup_user_complete
         const params = new URLSearchParams(search);
@@ -601,37 +642,35 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
             const {data: team} = await dispatch(addUserToTeamFromInvite(inviteToken, inviteId));
 
             if (team) {
-                finishSignin(userProfile, team);
+                finishSignin(team);
             } else {
                 // there's not really a good way to deal with this, so just let the user log in like normal
-                finishSignin(userProfile);
+                finishSignin();
             }
         } else {
-            finishSignin(userProfile);
+            finishSignin();
         }
     };
 
-    const finishSignin = (userProfile: UserProfile, team?: Team) => {
-        if (isCloud && isSystemAdmin(userProfile.roles)) {
-            dispatch(setNeedsLoggedInLimitReachedCheck(true));
-        }
-
-        const query = new URLSearchParams(search);
-        const redirectTo = query.get('redirect_to');
-
+    const finishSignin = (team?: Team) => {
         setCSRFFromCookie();
 
         // Record a successful login to local storage. If an unintentional logout occurs, e.g.
         // via session expiration, this bit won't get reset and we can notify the user as such.
         LocalStorageStore.setWasLoggedIn(true);
+
+        // After a user has just logged in, we set the following flag to "false" so that after
+        // a user is notified of successful login, we can set it back to "true"
+        LocalStorageStore.setWasNotifiedOfLogIn(false);
+
         if (redirectTo && redirectTo.match(/^\/([^/]|$)/)) {
             history.push(redirectTo);
         } else if (team) {
             history.push(`/${team.name}`);
-        } else if (experimentalPrimaryTeamMember.team_id) {
+        } else if (experimentalPrimaryTeamMember?.team_id) {
             // Only set experimental team if user is on that team
             history.push(`/${ExperimentalPrimaryTeam}`);
-        } else if (useCaseOnboarding) {
+        } else if (onboardingFlowEnabled) {
             // need info about whether admin or not,
             // and whether admin has already completed
             // first time onboarding. Instead of fetching and orchestrating that here,
@@ -668,12 +707,6 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
         setBrandImageError(true);
     };
 
-    const onEnterKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === Constants.KeyCodes.ENTER[0]) {
-            preSubmit(e);
-        }
-    };
-
     const getCardTitle = () => {
         if (CustomDescriptionText) {
             return CustomDescriptionText;
@@ -705,6 +738,37 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
         );
     };
 
+    const getResetPasswordLink = () => {
+        if (!PasswordEnableForgotLink || PasswordEnableForgotLink === 'false' || onlyLdapEnabled) {
+            return null;
+        }
+
+        if (ForgotPasswordLink) {
+            return (
+                <div className='login-body-card-form-link'>
+                    <ExternalLink
+                        location='login_page'
+                        href={ForgotPasswordLink}
+                    >
+                        {formatMessage({id: 'login.forgot', defaultMessage: 'Forgot your password?'})}
+                    </ExternalLink>
+                </div>
+            );
+        }
+
+        if (enableSignInWithUsername || enableSignInWithEmail) {
+            return (
+                <div className='login-body-card-form-link'>
+                    <Link to='/reset_password'>
+                        {formatMessage({id: 'login.forgot', defaultMessage: 'Forgot your password?'})}
+                    </Link>
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     const getContent = () => {
         if (showMfa) {
             return (
@@ -725,6 +789,20 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
             );
         }
 
+        if (desktopLoginLink || query.get('server_token')) {
+            return (
+                <Route
+                    path={'/login/desktop'}
+                    render={() => (
+                        <DesktopAuthToken
+                            href={desktopLoginLink}
+                            onLogin={postSubmit}
+                        />
+                    )}
+                />
+            );
+        }
+
         return (
             <>
                 <div
@@ -740,7 +818,7 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
                     {enableCustomBrand && !brandImageError ? (
                         <img
                             className={classNames('login-body-custom-branding-image')}
-                            alt='brand image'
+                            alt='brand'
                             src={Client4.getBrandImageUrl('0')}
                             onError={handleBrandImageError}
                         />
@@ -750,18 +828,12 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
                         </h1>
                     )}
                     {getMessageSubtitle()}
-                    {!enableCustomBrand && (
-                        <div className='login-body-message-svg'>
-                            <WomanWithChatsSVG width={270}/>
-                        </div>
-                    )}
                 </div>
                 <div className='login-body-action'>
                     {!isMobileView && getAlternateLink()}
                     <div className={classNames('login-body-card', {'custom-branding': enableCustomBrand, 'with-error': hasError})}>
                         <div
                             className='login-body-card-content'
-                            onKeyDown={onEnterKeyDown}
                             tabIndex={0}
                         >
                             <p className='login-body-card-title'>
@@ -777,44 +849,44 @@ const Login = ({onCustomizeHeader}: LoginProps) => {
                                 />
                             )}
                             {enableBaseLogin && (
-                                <div className='login-body-card-form'>
-                                    <Input
-                                        ref={loginIdInput}
-                                        name='loginId'
-                                        containerClassName='login-body-card-form-input'
-                                        type='text'
-                                        inputSize={SIZE.LARGE}
-                                        value={loginId}
-                                        onChange={handleInputOnChange}
-                                        hasError={hasError}
-                                        placeholder={getInputPlaceholder()}
-                                        disabled={isWaiting}
-                                        autoFocus={true}
-                                    />
-                                    <PasswordInput
-                                        ref={passwordInput}
-                                        className='login-body-card-form-password-input'
-                                        value={password}
-                                        inputSize={SIZE.LARGE}
-                                        onChange={handlePasswordInputOnChange}
-                                        hasError={hasError}
-                                        disabled={isWaiting}
-                                    />
-                                    {(enableSignInWithUsername || enableSignInWithEmail) && (
-                                        <div className='login-body-card-form-link'>
-                                            <Link to='/reset_password'>
-                                                {formatMessage({id: 'login.forgot', defaultMessage: 'Forgot your password?'})}
-                                            </Link>
-                                        </div>
-                                    )}
-                                    <SaveButton
-                                        extraClasses='login-body-card-form-button-submit large'
-                                        saving={isWaiting}
-                                        onClick={preSubmit}
-                                        defaultMessage={formatMessage({id: 'login.logIn', defaultMessage: 'Log in'})}
-                                        savingMessage={formatMessage({id: 'login.logingIn', defaultMessage: 'Logging in…'})}
-                                    />
-                                </div>
+                                <form
+                                    onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                                        preSubmit(event as unknown as React.MouseEvent);
+                                    }}
+                                >
+                                    <div className='login-body-card-form'>
+                                        <Input
+                                            ref={loginIdInput}
+                                            name='loginId'
+                                            containerClassName='login-body-card-form-input'
+                                            type='text'
+                                            inputSize={SIZE.LARGE}
+                                            value={loginId}
+                                            onChange={handleInputOnChange}
+                                            hasError={hasError}
+                                            placeholder={getInputPlaceholder()}
+                                            disabled={isWaiting}
+                                            autoFocus={true}
+                                        />
+                                        <PasswordInput
+                                            ref={passwordInput}
+                                            className='login-body-card-form-password-input'
+                                            value={password}
+                                            inputSize={SIZE.LARGE}
+                                            onChange={handlePasswordInputOnChange}
+                                            hasError={hasError}
+                                            disabled={isWaiting}
+                                        />
+                                        {getResetPasswordLink()}
+                                        <SaveButton
+                                            extraClasses='login-body-card-form-button-submit large'
+                                            saving={isWaiting}
+                                            onClick={preSubmit}
+                                            defaultMessage={formatMessage({id: 'login.logIn', defaultMessage: 'Log in'})}
+                                            savingMessage={formatMessage({id: 'login.logingIn', defaultMessage: 'Logging in…'})}
+                                        />
+                                    </div>
+                                </form>
                             )}
                             {enableBaseLogin && enableExternalSignup && (
                                 <div className='login-body-card-form-divider'>

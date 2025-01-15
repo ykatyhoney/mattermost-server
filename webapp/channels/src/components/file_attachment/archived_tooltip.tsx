@@ -5,10 +5,12 @@ import React from 'react';
 import {useIntl} from 'react-intl';
 
 import useGetLimits from 'components/common/hooks/useGetLimits';
+
 import {asGBString} from 'utils/limits';
 
 export default function ArchivedTooltip() {
     const intl = useIntl();
+
     return (
         <>
             <div className='post-image__archived-tooltip-title'>

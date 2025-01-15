@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/fileutils"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/fileutils"
 )
 
 func TestPluginPublicKeys(t *testing.T) {
@@ -42,7 +42,8 @@ func TestPluginPublicKeys(t *testing.T) {
 	fileReader, err := os.Open(filepath.Join(path, publicKeyFilename))
 	require.NoError(t, err)
 	defer fileReader.Close()
-	th.App.AddPublicKey(publicKeyFilename, fileReader)
+	appErr := th.App.AddPublicKey(publicKeyFilename, fileReader)
+	require.Nil(t, appErr)
 	file, appErr := th.App.GetPublicKey(publicKeyFilename)
 	require.Nil(t, appErr)
 	require.Equal(t, publicKey, file)

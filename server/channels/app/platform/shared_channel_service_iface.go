@@ -4,8 +4,8 @@
 package platform
 
 import (
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/services/sharedchannel"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/platform/services/sharedchannel"
 )
 
 // SharedChannelServiceIFace is the interface to the shared channel service
@@ -14,8 +14,15 @@ type SharedChannelServiceIFace interface {
 	Start() error
 	NotifyChannelChanged(channelId string)
 	NotifyUserProfileChanged(userID string)
+	NotifyUserStatusChanged(status *model.Status)
 	SendChannelInvite(channel *model.Channel, userId string, rc *model.RemoteCluster, options ...sharedchannel.InviteOption) error
 	Active() bool
+	InviteRemoteToChannel(channelID, remoteID, userID string, shareIfNotShared bool) error
+	UninviteRemoteFromChannel(channelID, remoteID string) error
+	ShareChannel(sc *model.SharedChannel) (*model.SharedChannel, error)
+	CheckChannelNotShared(channelID string) error
+	CheckChannelIsShared(channelID string) error
+	CheckCanInviteToSharedChannel(channelId string) error
 }
 
 type MockOptionSharedChannelService func(service *mockSharedChannelService)

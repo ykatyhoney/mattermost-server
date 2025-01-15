@@ -10,10 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin/plugintest/mock"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/testutils"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/testutils"
 )
 
 type MockScheduler struct {
@@ -29,7 +30,7 @@ func (scheduler *MockScheduler) NextScheduleTime(cfg *model.Config, now time.Tim
 	return &nextTime
 }
 
-func (scheduler *MockScheduler) ScheduleJob(cfg *model.Config, pendingJobs bool, lastSuccessfulJob *model.Job) (*model.Job, *model.AppError) {
+func (scheduler *MockScheduler) ScheduleJob(c request.CTX, cfg *model.Config, pendingJobs bool, lastSuccessfulJob *model.Job) (*model.Job, *model.AppError) {
 	return nil, nil
 }
 
@@ -53,10 +54,10 @@ func TestScheduler(t *testing.T) {
 			Cfg: &model.Config{
 				// mock config
 				DataRetentionSettings: model.DataRetentionSettings{
-					EnableMessageDeletion: model.NewBool(true),
+					EnableMessageDeletion: model.NewPointer(true),
 				},
 				MessageExportSettings: model.MessageExportSettings{
-					EnableExport: model.NewBool(true),
+					EnableExport: model.NewPointer(true),
 				},
 			},
 		},
@@ -67,10 +68,14 @@ func TestScheduler(t *testing.T) {
 	jobServer.RegisterJobType(model.JobTypeMessageExport, nil, new(MockScheduler))
 
 	t.Run("Base", func(t *testing.T) {
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
 
-		jobServer.StopSchedulers()
+		time.Sleep(2 * time.Second)
+
+		err = jobServer.StopSchedulers()
+		require.NoError(t, err)
+
 		// They should be all on here
 		for _, element := range jobServer.schedulers.nextRunTimes {
 			assert.NotNil(t, element)
@@ -79,10 +84,15 @@ func TestScheduler(t *testing.T) {
 
 	t.Run("ClusterLeaderChanged", func(t *testing.T) {
 		jobServer.initSchedulers()
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
 		jobServer.HandleClusterLeaderChange(false)
-		jobServer.StopSchedulers()
+
+		err = jobServer.StopSchedulers()
+		require.NoError(t, err)
+
 		// They should be turned off
 		for _, element := range jobServer.schedulers.nextRunTimes {
 			assert.Nil(t, element)
@@ -92,9 +102,13 @@ func TestScheduler(t *testing.T) {
 	t.Run("ClusterLeaderChangedBeforeStart", func(t *testing.T) {
 		jobServer.initSchedulers()
 		jobServer.HandleClusterLeaderChange(false)
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
-		jobServer.StopSchedulers()
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+		err = jobServer.StopSchedulers()
+		require.NoError(t, err)
+
 		for _, element := range jobServer.schedulers.nextRunTimes {
 			assert.Nil(t, element)
 		}
@@ -104,9 +118,13 @@ func TestScheduler(t *testing.T) {
 		jobServer.initSchedulers()
 		jobServer.HandleClusterLeaderChange(false)
 		jobServer.HandleClusterLeaderChange(true)
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
-		jobServer.StopSchedulers()
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+		err = jobServer.StopSchedulers()
+		require.NoError(t, err)
+
 		for _, element := range jobServer.schedulers.nextRunTimes {
 			assert.NotNil(t, element)
 		}
@@ -114,12 +132,16 @@ func TestScheduler(t *testing.T) {
 
 	t.Run("ConfigChanged", func(t *testing.T) {
 		jobServer.initSchedulers()
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
 		jobServer.HandleClusterLeaderChange(false)
 		// After running a config change, they should stay off
 		jobServer.schedulers.handleConfigChange(nil, nil)
-		jobServer.StopSchedulers()
+		err = jobServer.StopSchedulers()
+		require.NoError(t, err)
+
 		for _, element := range jobServer.schedulers.nextRunTimes {
 			assert.Nil(t, element)
 		}
@@ -127,14 +149,17 @@ func TestScheduler(t *testing.T) {
 
 	t.Run("ConfigChangedDeadlock", func(t *testing.T) {
 		jobServer.initSchedulers()
-		jobServer.StartSchedulers()
-		time.Sleep(time.Second)
+		err := jobServer.StartSchedulers()
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
 
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			jobServer.StopSchedulers()
+			err := jobServer.StopSchedulers()
+			require.NoError(t, err)
 		}()
 		go func() {
 			defer wg.Done()

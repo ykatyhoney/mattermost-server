@@ -1,21 +1,26 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import type {ReactWrapper} from 'enzyme';
 import React from 'react';
 import {Provider} from 'react-redux';
-import {act} from '@testing-library/react';
-import {ReactWrapper} from 'enzyme';
 import {BrowserRouter} from 'react-router-dom';
+
+import type {Group} from '@mattermost/types/groups';
+import type {UserProfile} from '@mattermost/types/users';
 
 import {General} from 'mattermost-redux/constants';
 import {displayUsername} from 'mattermost-redux/utils/user_utils';
+
 import {mountWithIntl} from 'tests/helpers/intl-test-helper';
+import {act} from 'tests/react_testing_utils';
 import mockStore from 'tests/test_store';
 import {TestHelper} from 'utils/test_helper';
 
-import {Load} from '../user_group_popover';
+import GroupMemberList from './group_member_list';
+import type {GroupMember} from './group_member_list';
 
-import GroupMemberList, {GroupMember} from './group_member_list';
+import {Load} from '../constants';
 
 jest.mock('react-redux', () => ({
     ...jest.requireActual('react-redux'),
@@ -38,6 +43,10 @@ const actImmediate = (wrapper: ReactWrapper) =>
     );
 
 describe('component/user_group_popover/group_member_list', () => {
+    const profiles: Record<string, UserProfile> = {};
+    const profilesInGroup: Record<Group['id'], Set<UserProfile['id']>> = {};
+    const statuses: Record<UserProfile['id'], string> = {};
+
     const group = TestHelper.getGroupMock({
         member_count: 5,
     });
@@ -56,6 +65,39 @@ describe('component/user_group_popover/group_member_list', () => {
         members.push({user, displayName});
     }
 
+    const initialState = {
+        entities: {
+            teams: {
+                currentTeamId: 'team_id1',
+                teams: {
+                    team_id1: {
+                        id: 'team_id1',
+                        name: 'team1',
+                    },
+                },
+            },
+            general: {
+                config: {},
+            },
+            users: {
+                profiles,
+                profilesInGroup,
+                statuses,
+            },
+            preferences: {
+                myPreferences: {},
+            },
+        },
+        views: {
+            modals: {
+                modalState: {},
+            },
+            search: {
+                popoverSearch: '',
+            },
+        },
+    };
+
     const baseProps = {
         searchTerm: '',
         group,
@@ -73,7 +115,7 @@ describe('component/user_group_popover/group_member_list', () => {
     };
 
     test('should match snapshot', async () => {
-        const store = await mockStore({});
+        const store = await mockStore(initialState);
         const wrapper = mountWithIntl(
             <Provider store={store}>
                 <BrowserRouter>
@@ -89,7 +131,7 @@ describe('component/user_group_popover/group_member_list', () => {
     });
 
     test('should open dms', async () => {
-        const store = await mockStore({});
+        const store = await mockStore(initialState);
         const wrapper = mountWithIntl(
             <Provider store={store}>
                 <BrowserRouter>
@@ -106,7 +148,7 @@ describe('component/user_group_popover/group_member_list', () => {
     });
 
     test('should show user overlay and hide', async () => {
-        const store = await mockStore({});
+        const store = await mockStore(initialState);
         const wrapper = mountWithIntl(
             <Provider store={store}>
                 <BrowserRouter>

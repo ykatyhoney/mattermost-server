@@ -1,37 +1,40 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import classNames from 'classnames';
+import React from 'react';
 
-import {ProductIdentifier} from '@mattermost/types/products';
-import {Team} from '@mattermost/types/teams';
-import {Channel} from '@mattermost/types/channels';
-
-import {RhsState} from 'types/store/rhs';
+import type {Channel} from '@mattermost/types/channels';
+import type {ProductIdentifier} from '@mattermost/types/products';
+import type {Team} from '@mattermost/types/teams';
 
 import {trackEvent} from 'actions/telemetry_actions.jsx';
 
-import Constants from 'utils/constants';
-import {isMac} from 'utils/user_agent';
-import {cmdOrCtrlPressed, isKeyPressed} from 'utils/keyboard';
-
-import FileUploadOverlay from 'components/file_upload_overlay';
-import RhsThread from 'components/rhs_thread';
-import RhsCard from 'components/rhs_card';
 import ChannelInfoRhs from 'components/channel_info_rhs';
 import ChannelMembersRhs from 'components/channel_members_rhs';
-import Search from 'components/search/index';
-import PostEditHistory from 'components/post_edit_history';
+import FileUploadOverlay from 'components/file_upload_overlay';
+import {DropOverlayIdRHS} from 'components/file_upload_overlay/file_upload_overlay';
 import LoadingScreen from 'components/loading_screen';
+import PostEditHistory from 'components/post_edit_history';
+import ResizableRhs from 'components/resizable_sidebar/resizable_rhs';
+import RhsCard from 'components/rhs_card';
+import RhsThread from 'components/rhs_thread';
+import Search from 'components/search/index';
 
 import RhsPlugin from 'plugins/rhs_plugin';
+import a11yController from 'utils/a11y_controller_instance';
+import type {A11yFocusEventDetail} from 'utils/constants';
+import Constants, {A11yCustomEventTypes} from 'utils/constants';
+import {cmdOrCtrlPressed, isKeyPressed} from 'utils/keyboard';
+import {isMac} from 'utils/user_agent';
 
-type Props = {
+import type {RhsState} from 'types/store/rhs';
+
+export type Props = {
     isExpanded: boolean;
     isOpen: boolean;
-    channel: Channel;
-    team: Team;
+    channel?: Channel;
+    team?: Team;
     teamId: Team['id'];
     productId: ProductIdentifier;
     postRightVisible: boolean;
@@ -44,9 +47,11 @@ type Props = {
     isPluginView: boolean;
     isPostEditHistory: boolean;
     previousRhsState: RhsState;
-    rhsChannel: Channel;
+    rhsChannel?: Channel;
     selectedPostId: string;
     selectedPostCardId: string;
+    isSavedPosts?: boolean;
+    isRecentMentions?: boolean;
     actions: {
         setRhsExpanded: (expanded: boolean) => void;
         showPinnedPosts: (channelId: string) => void;
@@ -65,13 +70,16 @@ type State = {
 
 export default class SidebarRight extends React.PureComponent<Props, State> {
     sidebarRight: React.RefObject<HTMLDivElement>;
+    sidebarRightWidthHolder: React.RefObject<HTMLDivElement>;
     previous: Partial<Props> | undefined = undefined;
     focusSearchBar?: () => void;
+    private previousActiveElement: HTMLElement | null = null;
 
     constructor(props: Props) {
         super(props);
 
-        this.sidebarRight = React.createRef();
+        this.sidebarRightWidthHolder = React.createRef<HTMLDivElement>();
+        this.sidebarRight = React.createRef<HTMLDivElement>();
         this.state = {
             isOpened: false,
         };
@@ -85,6 +93,8 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
         this.previous = {
             searchVisible: this.props.searchVisible,
             isPinnedPosts: this.props.isPinnedPosts,
+            isRecentMentions: this.props.isRecentMentions,
+            isSavedPosts: this.props.isSavedPosts,
             isChannelFiles: this.props.isChannelFiles,
             isChannelInfo: this.props.isChannelInfo,
             isChannelMembers: this.props.isChannelMembers,
@@ -129,6 +139,59 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
         }
     };
 
+    handleRHSFocus(prevProps: Props) {
+        const wasOpen = prevProps.isOpen;
+        const isOpen = this.props.isOpen;
+
+        const contentChanged = (
+            (this.props.isPinnedPosts !== prevProps.isPinnedPosts) ||
+            (this.props.isRecentMentions !== prevProps.isRecentMentions) ||
+            (this.props.isSavedPosts !== prevProps.isSavedPosts) ||
+            (this.props.isChannelFiles !== prevProps.isChannelFiles) ||
+            (this.props.isChannelInfo !== prevProps.isChannelInfo) ||
+            (this.props.isChannelMembers !== prevProps.isChannelMembers) ||
+            (this.props.isPostEditHistory !== prevProps.isPostEditHistory) ||
+            (this.props.rhsChannel?.id !== prevProps.rhsChannel?.id) ||
+            (this.props.teamId !== prevProps.teamId)
+        );
+
+        if (this.props.isOpen && (contentChanged || (!wasOpen && isOpen))) {
+            this.previousActiveElement = document.activeElement as HTMLElement;
+            setTimeout(() => {
+                if (this.sidebarRight.current) {
+                    document.dispatchEvent(
+                        new CustomEvent<A11yFocusEventDetail>(A11yCustomEventTypes.FOCUS, {
+                            detail: {
+                                target: this.sidebarRight.current,
+                                keyboardOnly: false,
+                            },
+                        }),
+                    );
+                }
+            }, 0);
+        } else if (!this.props.isOpen && wasOpen) {
+            // RHS just was closed, restore focus to the previous element had it
+            // this will have to change for upcoming work specially for search and probalby plugins
+            if (a11yController.originElement) {
+                a11yController.restoreOriginFocus();
+            } else {
+                setTimeout(() => {
+                    if (this.previousActiveElement) {
+                        document.dispatchEvent(
+                            new CustomEvent<A11yFocusEventDetail>(A11yCustomEventTypes.FOCUS, {
+                                detail: {
+                                    target: this.previousActiveElement,
+                                    keyboardOnly: false,
+                                },
+                            }),
+                        );
+                        this.previousActiveElement = null;
+                    }
+                }, 0);
+            }
+        }
+    }
+
     componentDidMount() {
         document.addEventListener('keydown', this.handleShortcut);
         document.addEventListener('mousedown', this.handleClickOutside);
@@ -147,12 +210,14 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
             trackEvent('ui', 'ui_rhs_opened');
         }
 
+        this.handleRHSFocus(prevProps);
+
         const {actions, isChannelFiles, isPinnedPosts, rhsChannel, channel} = this.props;
-        if (isPinnedPosts && prevProps.isPinnedPosts === isPinnedPosts && rhsChannel.id !== prevProps.rhsChannel.id) {
+        if (isPinnedPosts && prevProps.isPinnedPosts === isPinnedPosts && rhsChannel && rhsChannel.id !== prevProps.rhsChannel?.id) {
             actions.showPinnedPosts(rhsChannel.id);
         }
 
-        if (isChannelFiles && prevProps.isChannelFiles === isChannelFiles && rhsChannel.id !== prevProps.rhsChannel.id) {
+        if (isChannelFiles && prevProps.isChannelFiles === isChannelFiles && rhsChannel && rhsChannel.id !== prevProps.rhsChannel?.id) {
             actions.showChannelFiles(rhsChannel.id);
         }
 
@@ -229,7 +294,10 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
             selectedChannelNeeded = true;
             content = (
                 <div className='post-right__container'>
-                    <FileUploadOverlay overlayType='right'/>
+                    <FileUploadOverlay
+                        overlayType='right'
+                        id={DropOverlayIdRHS}
+                    />
                     <RhsThread previousRhsState={previousRhsState}/>
                 </div>
             );
@@ -262,14 +330,21 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
 
         return (
             <>
-                <div className={'sidebar--right sidebar--right--width-holder'}/>
                 <div
+                    className={'sidebar--right sidebar--right--width-holder'}
+                    ref={this.sidebarRightWidthHolder}
+                />
+                <ResizableRhs
                     className={containerClassName}
                     id='sidebar-right'
-                    role='complementary'
-                    ref={this.sidebarRight}
+                    role='region'
+                    rightWidthHolderRef={this.sidebarRightWidthHolder}
                 >
-                    <div className='sidebar-right-container'>
+                    <div
+                        tabIndex={-1}
+                        className='sidebar-right-container'
+                        ref={this.sidebarRight}
+                    >
                         {isRHSLoading ? (
                             <div className='sidebar-right__body'>
                                 {/* Sometimes the channel/team is not loaded yet, so we need to wait for it */}
@@ -286,7 +361,7 @@ export default class SidebarRight extends React.PureComponent<Props, State> {
                             </Search>
                         )}
                     </div>
-                </div>
+                </ResizableRhs>
             </>
         );
     }

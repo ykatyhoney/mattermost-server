@@ -6,9 +6,9 @@ package app
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,15 +18,15 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	oauthgitlab "github.com/mattermost/mattermost-server/v6/model/oauthproviders/gitlab"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/users"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	storemocks "github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/testutils"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	oauthgitlab "github.com/mattermost/mattermost/server/v8/channels/app/oauthproviders/gitlab"
+	"github.com/mattermost/mattermost/server/v8/channels/app/users"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	storemocks "github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/testutils"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
+	"github.com/mattermost/mattermost/server/v8/einterfaces/mocks"
 )
 
 func TestCreateOAuthUser(t *testing.T) {
@@ -47,7 +47,8 @@ func TestCreateOAuthUser(t *testing.T) {
 
 		require.Equal(t, glUser.Username, user.Username, "usernames didn't match")
 
-		th.App.PermanentDeleteUser(th.Context, user)
+		appErr := th.App.PermanentDeleteUser(th.Context, user)
+		require.Nil(t, appErr)
 	})
 
 	t.Run("user exists, update authdata successfully", func(t *testing.T) {
@@ -58,14 +59,14 @@ func TestCreateOAuthUser(t *testing.T) {
 		dbUser := th.BasicUser
 
 		// mock oAuth Provider, return data
-		mockUser := &model.User{Id: "abcdef", AuthData: model.NewString("e7110007-64be-43d8-9840-4a7e9c26b710"), Email: dbUser.Email}
+		mockUser := &model.User{Id: "abcdef", AuthData: model.NewPointer("e7110007-64be-43d8-9840-4a7e9c26b710"), Email: dbUser.Email}
 		providerMock := &mocks.OAuthProvider{}
-		providerMock.On("IsSameUser", mock.Anything, mock.Anything).Return(true)
-		providerMock.On("GetUserFromJSON", mock.Anything, mock.Anything).Return(mockUser, nil)
+		providerMock.On("IsSameUser", mock.AnythingOfType("*request.Context"), mock.Anything, mock.Anything).Return(true)
+		providerMock.On("GetUserFromJSON", mock.AnythingOfType("*request.Context"), mock.Anything, mock.Anything).Return(mockUser, nil)
 		einterfaces.RegisterOAuthProvider(model.ServiceOffice365, providerMock)
 
 		// Update user to be OAuth, formatting to match Office365 OAuth data
-		s, er2 := th.App.Srv().Store().User().UpdateAuthData(dbUser.Id, model.ServiceOffice365, model.NewString("e711000764be43d898404a7e9c26b710"), "", false)
+		s, er2 := th.App.Srv().Store().User().UpdateAuthData(dbUser.Id, model.ServiceOffice365, model.NewPointer("e711000764be43d898404a7e9c26b710"), "", false)
 		assert.NoError(t, er2)
 		assert.Equal(t, dbUser.Id, s)
 
@@ -85,9 +86,11 @@ func TestCreateOAuthUser(t *testing.T) {
 	})
 }
 
-func TestSetDefaultProfileImage(t *testing.T) {
+func TestUpdateDefaultProfileImage(t *testing.T) {
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
+	startTime := model.GetMillis()
+	time.Sleep(time.Millisecond)
 
 	err := th.App.SetDefaultProfileImage(th.Context, &model.User{
 		Id:       model.NewId(),
@@ -98,35 +101,35 @@ func TestSetDefaultProfileImage(t *testing.T) {
 
 	user := th.BasicUser
 
-	err = th.App.SetDefaultProfileImage(th.Context, user)
+	err = th.App.UpdateDefaultProfileImage(th.Context, user)
 	require.Nil(t, err)
 
 	user = getUserFromDB(th.App, user.Id, t)
-	assert.Equal(t, int64(0), user.LastPictureUpdate)
+	assert.Less(t, user.LastPictureUpdate, -startTime, "LastPictureUpdate should be set to -(current time in milliseconds)")
 }
 
 func TestAdjustProfileImage(t *testing.T) {
 	th := Setup(t).InitBasic()
 	defer th.TearDown()
 
-	_, err := th.App.AdjustImage(bytes.NewReader([]byte{}))
-	require.NotNil(t, err)
+	_, appErr := th.App.AdjustImage(bytes.NewReader([]byte{}))
+	require.NotNil(t, appErr)
 
 	// test image isn't the correct dimensions
 	// it should be adjusted
-	testjpg, error := testutils.ReadTestFile("testjpg.jpg")
-	require.NoError(t, error)
-	adjusted, err := th.App.AdjustImage(bytes.NewReader(testjpg))
-	require.Nil(t, err)
+	testjpg, err := testutils.ReadTestFile("testjpg.jpg")
+	require.NoError(t, err)
+	adjusted, appErr := th.App.AdjustImage(bytes.NewReader(testjpg))
+	require.Nil(t, appErr)
 	assert.True(t, adjusted.Len() > 0)
 	assert.NotEqual(t, testjpg, adjusted)
 
 	// default image should not require adjustment
 	user := th.BasicUser
-	image, err := th.App.GetDefaultProfileImage(user)
-	require.Nil(t, err)
-	image2, err := th.App.AdjustImage(bytes.NewReader(image))
-	require.Nil(t, err)
+	image, appErr := th.App.GetDefaultProfileImage(user)
+	require.Nil(t, appErr)
+	image2, appErr := th.App.AdjustImage(bytes.NewReader(image))
+	require.Nil(t, appErr)
 	assert.Equal(t, image, image2.Bytes())
 }
 
@@ -135,7 +138,10 @@ func TestUpdateUserToRestrictedDomain(t *testing.T) {
 	defer th.TearDown()
 
 	user := th.CreateUser()
-	defer th.App.PermanentDeleteUser(th.Context, user)
+	defer func() {
+		appErr := th.App.PermanentDeleteUser(th.Context, user)
+		require.Nil(t, appErr)
+	}()
 
 	th.App.UpdateConfig(func(cfg *model.Config) {
 		*cfg.TeamSettings.RestrictCreationToDomains = "foo.com"
@@ -150,7 +156,10 @@ func TestUpdateUserToRestrictedDomain(t *testing.T) {
 
 	t.Run("Restricted Domains must be ignored for guest users", func(t *testing.T) {
 		guest := th.CreateGuest()
-		defer th.App.PermanentDeleteUser(th.Context, guest)
+		defer func() {
+			appErr := th.App.PermanentDeleteUser(th.Context, guest)
+			require.Nil(t, appErr)
+		}()
 
 		th.App.UpdateConfig(func(cfg *model.Config) {
 			*cfg.TeamSettings.RestrictCreationToDomains = "foo.com"
@@ -164,7 +173,10 @@ func TestUpdateUserToRestrictedDomain(t *testing.T) {
 
 	t.Run("Guest users should be affected by guest restricted domains", func(t *testing.T) {
 		guest := th.CreateGuest()
-		defer th.App.PermanentDeleteUser(th.Context, guest)
+		defer func() {
+			appErr := th.App.PermanentDeleteUser(th.Context, guest)
+			require.Nil(t, appErr)
+		}()
 
 		th.App.UpdateConfig(func(cfg *model.Config) {
 			*cfg.GuestAccountsSettings.RestrictCreationToDomains = "foo.com"
@@ -194,6 +206,34 @@ func TestUpdateUser(t *testing.T) {
 		require.NotNil(t, err)
 		require.Nil(t, u)
 	})
+
+	t.Run("fails if default profile picture is not updated when user has default profile picture and username is changed", func(t *testing.T) {
+		user.Username = "updatedUsername"
+		iLastPictureUpdate := user.LastPictureUpdate
+		require.Equal(t, iLastPictureUpdate, int64(0))
+		u, err := th.App.UpdateUser(th.Context, user, false)
+		require.Nil(t, err)
+		require.NotNil(t, u)
+		require.Less(t, u.LastPictureUpdate, iLastPictureUpdate)
+		require.Empty(t, u.Password)
+	})
+
+	t.Run("fails if profile picture is updated when user has custom profile picture and username is changed", func(t *testing.T) {
+		// Give the user a LastPictureUpdate to mimic having a custom profile picture
+		err := th.App.Srv().Store().User().UpdateLastPictureUpdate(user.Id)
+		require.NoError(t, err)
+		iUser, errGetUser := th.App.GetUser(user.Id)
+		require.Nil(t, errGetUser)
+		iUser.Username = "updatedUsername"
+		iLastPictureUpdate := iUser.LastPictureUpdate
+		require.Greater(t, iLastPictureUpdate, int64(0))
+
+		// Attempt the update, ensure the LastPictureUpdate has not changed
+		updatedUser, errUpdateUser := th.App.UpdateUser(th.Context, iUser, false)
+		require.Nil(t, errUpdateUser)
+		require.NotNil(t, updatedUser)
+		require.Equal(t, updatedUser.LastPictureUpdate, iLastPictureUpdate)
+	})
 }
 
 func TestUpdateUserMissingFields(t *testing.T) {
@@ -201,7 +241,10 @@ func TestUpdateUserMissingFields(t *testing.T) {
 	defer th.TearDown()
 
 	user := th.CreateUser()
-	defer th.App.PermanentDeleteUser(th.Context, user)
+	defer func() {
+		appErr := th.App.PermanentDeleteUser(th.Context, user)
+		require.Nil(t, appErr)
+	}()
 
 	tests := map[string]struct {
 		input  *model.User
@@ -255,8 +298,8 @@ func TestCreateUser(t *testing.T) {
 			package main
 
 			import (
-				"github.com/mattermost/mattermost-server/v6/plugin"
-				"github.com/mattermost/mattermost-server/v6/model"
+				"github.com/mattermost/mattermost/server/public/plugin"
+				"github.com/mattermost/mattermost/server/public/model"
 			)
 
 			type MyPlugin struct {
@@ -323,39 +366,46 @@ func TestUpdateActiveBotsSideEffect(t *testing.T) {
 		OwnerId:     th.BasicUser.Id,
 	})
 	require.Nil(t, err)
-	defer th.App.PermanentDeleteBot(bot.UserId)
+	defer func() {
+		appErr := th.App.PermanentDeleteBot(th.Context, bot.UserId)
+		require.Nil(t, appErr)
+	}()
 
 	// Automatic deactivation disabled
 	th.App.UpdateConfig(func(cfg *model.Config) {
 		*cfg.ServiceSettings.DisableBotsWhenOwnerIsDeactivated = false
 	})
 
-	th.App.UpdateActive(th.Context, th.BasicUser, false)
+	_, appErr := th.App.UpdateActive(th.Context, th.BasicUser, false)
+	require.Nil(t, appErr)
 
-	retbot1, err := th.App.GetBot(bot.UserId, true)
+	retbot1, err := th.App.GetBot(th.Context, bot.UserId, true)
 	require.Nil(t, err)
 	require.Zero(t, retbot1.DeleteAt)
 	user1, err := th.App.GetUser(bot.UserId)
 	require.Nil(t, err)
 	require.Zero(t, user1.DeleteAt)
 
-	th.App.UpdateActive(th.Context, th.BasicUser, true)
+	_, appErr = th.App.UpdateActive(th.Context, th.BasicUser, true)
+	require.Nil(t, appErr)
 
 	// Automatic deactivation enabled
 	th.App.UpdateConfig(func(cfg *model.Config) {
 		*cfg.ServiceSettings.DisableBotsWhenOwnerIsDeactivated = true
 	})
 
-	th.App.UpdateActive(th.Context, th.BasicUser, false)
+	_, appErr = th.App.UpdateActive(th.Context, th.BasicUser, false)
+	require.Nil(t, appErr)
 
-	retbot2, err := th.App.GetBot(bot.UserId, true)
+	retbot2, err := th.App.GetBot(th.Context, bot.UserId, true)
 	require.Nil(t, err)
 	require.NotZero(t, retbot2.DeleteAt)
 	user2, err := th.App.GetUser(bot.UserId)
 	require.Nil(t, err)
 	require.NotZero(t, user2.DeleteAt)
 
-	th.App.UpdateActive(th.Context, th.BasicUser, true)
+	_, appErr = th.App.UpdateActive(th.Context, th.BasicUser, true)
+	require.Nil(t, appErr)
 }
 
 func TestUpdateOAuthUserAttrs(t *testing.T) {
@@ -387,7 +437,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 			data := bytes.NewReader(gitlabUser)
 
 			user = getUserFromDB(th.App, user.Id, t)
-			th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+			appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+			require.Nil(t, appErr)
 			user = getUserFromDB(th.App, user.Id, t)
 
 			require.Equal(t, gitlabUserObj.Username, user.Username, "user's username is not updated")
@@ -400,7 +451,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 			data := bytes.NewReader(gitlabUser)
 
 			user = getUserFromDB(th.App, user.Id, t)
-			th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+			appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+			require.Nil(t, appErr)
 			user = getUserFromDB(th.App, user.Id, t)
 
 			require.NotEqual(t, gitlabUserObj.Username, user.Username, "user's username is updated though there already exists another user with the same username")
@@ -414,7 +466,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 			data := bytes.NewReader(gitlabUser)
 
 			user = getUserFromDB(th.App, user.Id, t)
-			th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+			appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+			require.Nil(t, appErr)
 			user = getUserFromDB(th.App, user.Id, t)
 
 			require.Equal(t, gitlabUserObj.Email, user.Email, "user's email is not updated")
@@ -429,7 +482,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 			data := bytes.NewReader(gitlabUser)
 
 			user = getUserFromDB(th.App, user.Id, t)
-			th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+			appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+			require.Nil(t, appErr)
 			user = getUserFromDB(th.App, user.Id, t)
 
 			require.NotEqual(t, gitlabUserObj.Email, user.Email, "user's email is updated though there already exists another user with the same email")
@@ -442,7 +496,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 		data := bytes.NewReader(gitlabUser)
 
 		user = getUserFromDB(th.App, user.Id, t)
-		th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+		appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+		require.Nil(t, appErr)
 		user = getUserFromDB(th.App, user.Id, t)
 
 		require.Equal(t, "Updated", user.FirstName, "user's first name is not updated")
@@ -454,7 +509,8 @@ func TestUpdateOAuthUserAttrs(t *testing.T) {
 		data := bytes.NewReader(gitlabUser)
 
 		user = getUserFromDB(th.App, user.Id, t)
-		th.App.UpdateOAuthUserAttrs(data, user, gitlabProvider, "gitlab", nil)
+		appErr := th.App.UpdateOAuthUserAttrs(th.Context, data, user, gitlabProvider, "gitlab", nil)
+		require.Nil(t, appErr)
 		user = getUserFromDB(th.App, user.Id, t)
 
 		require.Equal(t, "Lastname", user.LastName, "user's last name is not updated")
@@ -467,15 +523,15 @@ func TestCreateUserConflict(t *testing.T) {
 
 	user := &model.User{
 		Email:    "test@localhost",
-		Username: model.NewId(),
+		Username: model.NewUsername(),
 	}
-	user, err := th.App.Srv().Store().User().Save(user)
+	user, err := th.App.Srv().Store().User().Save(th.Context, user)
 	require.NoError(t, err)
 	username := user.Username
 
 	var invErr *store.ErrInvalidInput
 	// Same id
-	_, err = th.App.Srv().Store().User().Save(user)
+	_, err = th.App.Srv().Store().User().Save(th.Context, user)
 	require.Error(t, err)
 	require.True(t, errors.As(err, &invErr))
 	assert.Equal(t, "id", invErr.Field)
@@ -483,9 +539,9 @@ func TestCreateUserConflict(t *testing.T) {
 	// Same email
 	user = &model.User{
 		Email:    "test@localhost",
-		Username: model.NewId(),
+		Username: model.NewUsername(),
 	}
-	_, err = th.App.Srv().Store().User().Save(user)
+	_, err = th.App.Srv().Store().User().Save(th.Context, user)
 	require.Error(t, err)
 	require.True(t, errors.As(err, &invErr))
 	assert.Equal(t, "email", invErr.Field)
@@ -495,7 +551,7 @@ func TestCreateUserConflict(t *testing.T) {
 		Email:    "test2@localhost",
 		Username: username,
 	}
-	_, err = th.App.Srv().Store().User().Save(user)
+	_, err = th.App.Srv().Store().User().Save(th.Context, user)
 	require.Error(t, err)
 	require.True(t, errors.As(err, &invErr))
 	assert.Equal(t, "username", invErr.Field)
@@ -535,10 +591,10 @@ func TestUpdateUserEmail(t *testing.T) {
 		// Create bot user
 		botuser := model.User{
 			Email:    "botuser@localhost",
-			Username: model.NewId(),
+			Username: model.NewUsername(),
 			IsBot:    true,
 		}
-		_, nErr := th.App.Srv().Store().User().Save(&botuser)
+		_, nErr := th.App.Srv().Store().User().Save(th.Context, &botuser)
 		assert.NoError(t, nErr)
 
 		newBotEmail := th.MakeEmail()
@@ -546,7 +602,6 @@ func TestUpdateUserEmail(t *testing.T) {
 		botuser2, appErr := th.App.UpdateUser(th.Context, &botuser, false)
 		assert.Nil(t, appErr)
 		assert.Equal(t, botuser2.Email, newBotEmail)
-
 	})
 
 	t.Run("RequireVerificationAlreadyUsedEmail", func(t *testing.T) {
@@ -579,10 +634,10 @@ func TestUpdateUserEmail(t *testing.T) {
 		// Create bot user
 		botuser := model.User{
 			Email:    "botuser@localhost",
-			Username: model.NewId(),
+			Username: model.NewUsername(),
 			IsBot:    true,
 		}
-		_, nErr := th.App.Srv().Store().User().Save(&botuser)
+		_, nErr := th.App.Srv().Store().User().Save(th.Context, &botuser)
 		assert.NoError(t, nErr)
 
 		newBotEmail := th.MakeEmail()
@@ -669,7 +724,7 @@ func getGitlabUserPayload(gitlabUser oauthgitlab.GitLabUser, t *testing.T) []byt
 	return payload
 }
 
-func createGitlabUser(t *testing.T, a *App, c *request.Context, id int64, username string, email string) (*model.User, oauthgitlab.GitLabUser) {
+func createGitlabUser(t *testing.T, a *App, c request.CTX, id int64, username string, email string) (*model.User, oauthgitlab.GitLabUser) {
 	gitlabUserObj := oauthgitlab.GitLabUser{Id: id, Username: username, Login: "user1", Email: email, Name: "Test User"}
 	gitlabUser := getGitlabUserPayload(gitlabUserObj, t)
 
@@ -857,7 +912,10 @@ func TestCreateUserWithToken(t *testing.T) {
 			model.MapToJSON(map[string]string{"teamID": th.BasicTeam.Id, "email": user.Email}),
 		)
 		require.NoError(t, th.App.Srv().Store().Token().Save(token))
-		defer th.App.DeleteToken(token)
+		defer func() {
+			appErr := th.App.DeleteToken(token)
+			require.Nil(t, appErr)
+		}()
 		_, err := th.App.CreateUserWithToken(th.Context, &user, token)
 		require.NotNil(t, err, "Should fail on bad token type")
 	})
@@ -881,7 +939,10 @@ func TestCreateUserWithToken(t *testing.T) {
 		)
 		token.CreateAt = model.GetMillis() - InvitationExpiryTime - 1
 		require.NoError(t, th.App.Srv().Store().Token().Save(token))
-		defer th.App.DeleteToken(token)
+		defer func() {
+			appErr := th.App.DeleteToken(token)
+			require.Nil(t, appErr)
+		}()
 		_, err := th.App.CreateUserWithToken(th.Context, &user, token)
 		require.NotNil(t, err, "Should fail on expired token")
 	})
@@ -892,7 +953,10 @@ func TestCreateUserWithToken(t *testing.T) {
 			model.MapToJSON(map[string]string{"teamId": model.NewId(), "email": user.Email}),
 		)
 		require.NoError(t, th.App.Srv().Store().Token().Save(token))
-		defer th.App.DeleteToken(token)
+		defer func() {
+			appErr := th.App.DeleteToken(token)
+			require.Nil(t, appErr)
+		}()
 		_, err := th.App.CreateUserWithToken(th.Context, &user, token)
 		require.NotNil(t, err, "Should fail on bad team id")
 	})
@@ -1026,12 +1090,12 @@ func TestCreateUserWithToken(t *testing.T) {
 }
 
 func TestPermanentDeleteUser(t *testing.T) {
-	th := Setup(t).InitBasic()
+	th := Setup(t).InitBasic().DeleteBots()
 	defer th.TearDown()
 
 	b := []byte("testimage")
 
-	finfo, err := th.App.DoUploadFile(th.Context, time.Now(), th.BasicTeam.Id, th.BasicChannel.Id, th.BasicUser.Id, "testfile.txt", b)
+	finfo, err := th.App.DoUploadFile(th.Context, time.Now(), th.BasicTeam.Id, th.BasicChannel.Id, th.BasicUser.Id, "testfile.txt", b, true)
 
 	require.Nil(t, err, "Unable to upload file. err=%v", err)
 
@@ -1052,7 +1116,7 @@ func TestPermanentDeleteUser(t *testing.T) {
 	bots2 := []*model.Bot{}
 
 	sqlStore := mainHelper.GetSQLStore()
-	err1 := sqlStore.GetMasterX().Select(&bots1, "SELECT * FROM Bots")
+	err1 := sqlStore.GetMaster().Select(&bots1, "SELECT * FROM Bots")
 	assert.NoError(t, err1)
 	assert.Equal(t, 1, len(bots1))
 
@@ -1063,9 +1127,33 @@ func TestPermanentDeleteUser(t *testing.T) {
 	err = th.App.PermanentDeleteUser(th.Context, retUser1)
 	assert.Nil(t, err)
 
-	err1 = sqlStore.GetMasterX().Select(&bots2, "SELECT * FROM Bots")
+	err1 = sqlStore.GetMaster().Select(&bots2, "SELECT * FROM Bots")
 	assert.NoError(t, err1)
 	assert.Equal(t, 0, len(bots2))
+
+	scheduledPost1 := &model.ScheduledPost{
+		Draft: model.Draft{
+			ChannelId: th.BasicChannel.Id,
+			UserId:    th.BasicUser.Id,
+			Message:   "Scheduled post 1",
+		},
+		ScheduledAt: model.GetMillis() + 1000000,
+	}
+
+	createdScheduledPost1, appErr := th.App.SaveScheduledPost(th.Context, scheduledPost1, "")
+	require.Nil(t, appErr)
+
+	scheduledPost2 := &model.ScheduledPost{
+		Draft: model.Draft{
+			ChannelId: th.BasicChannel.Id,
+			UserId:    th.BasicUser.Id,
+			Message:   "Scheduled post 2",
+		},
+		ScheduledAt: model.GetMillis() + 1000000,
+	}
+
+	createdScheduledPost2, appErr := th.App.SaveScheduledPost(th.Context, scheduledPost2, "")
+	require.Nil(t, appErr)
 
 	err = th.App.PermanentDeleteUser(th.Context, th.BasicUser)
 	require.Nil(t, err, "Unable to delete user. err=%v", err)
@@ -1076,7 +1164,7 @@ func TestPermanentDeleteUser(t *testing.T) {
 
 	require.False(t, res, "File was not deleted on FS. err=%v", err)
 
-	finfo, err = th.App.GetFileInfo(finfo.Id)
+	finfo, err = th.App.GetFileInfo(th.Context, finfo.Id)
 
 	require.Nil(t, finfo, "Unable to find finfo. err=%v", err)
 
@@ -1086,6 +1174,15 @@ func TestPermanentDeleteUser(t *testing.T) {
 	exists, err := th.App.FileExists(filepath.Join("users", user.Id))
 	require.Nil(t, err, "Unable to stat finfo. err=%v", err)
 	require.False(t, exists, "Profile image wasn't deleted. err=%v", err)
+
+	// verify scheduled posts have been deleted
+	fetchedScheduledPost, scheduledPostErr := th.App.Srv().Store().ScheduledPost().Get(createdScheduledPost1.Id)
+	require.ErrorIs(t, scheduledPostErr, sql.ErrNoRows)
+	require.Nil(t, fetchedScheduledPost)
+
+	fetchedScheduledPost, scheduledPostErr = th.App.Srv().Store().ScheduledPost().Get(createdScheduledPost2.Id)
+	require.ErrorIs(t, scheduledPostErr, sql.ErrNoRows)
+	require.Nil(t, fetchedScheduledPost)
 }
 
 func TestPasswordRecovery(t *testing.T) {
@@ -1093,17 +1190,17 @@ func TestPasswordRecovery(t *testing.T) {
 	defer th.TearDown()
 
 	t.Run("password token with same email as during creation", func(t *testing.T) {
-		token, err := th.App.CreatePasswordRecoveryToken(th.BasicUser.Id, th.BasicUser.Email)
+		token, err := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
 		assert.Nil(t, err)
 
 		tokenData := struct {
-			UserId string
+			UserID string
 			Email  string
 		}{}
 
 		err2 := json.Unmarshal([]byte(token.Extra), &tokenData)
 		assert.NoError(t, err2)
-		assert.Equal(t, th.BasicUser.Id, tokenData.UserId)
+		assert.Equal(t, th.BasicUser.Id, tokenData.UserID)
 		assert.Equal(t, th.BasicUser.Email, tokenData.Email)
 
 		err = th.App.ResetPasswordFromToken(th.Context, token.Token, "abcdefgh")
@@ -1111,7 +1208,7 @@ func TestPasswordRecovery(t *testing.T) {
 	})
 
 	t.Run("password token with modified email as during creation", func(t *testing.T) {
-		token, err := th.App.CreatePasswordRecoveryToken(th.BasicUser.Id, th.BasicUser.Email)
+		token, err := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
 		assert.Nil(t, err)
 
 		th.App.UpdateConfig(func(c *model.Config) {
@@ -1127,7 +1224,7 @@ func TestPasswordRecovery(t *testing.T) {
 	})
 
 	t.Run("non-expired token", func(t *testing.T) {
-		token, err := th.App.CreatePasswordRecoveryToken(th.BasicUser.Id, th.BasicUser.Email)
+		token, err := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
 		assert.Nil(t, err)
 
 		err = th.App.resetPasswordFromToken(th.Context, token.Token, "abcdefgh", model.GetMillis())
@@ -1135,13 +1232,197 @@ func TestPasswordRecovery(t *testing.T) {
 	})
 
 	t.Run("expired token", func(t *testing.T) {
-		token, err := th.App.CreatePasswordRecoveryToken(th.BasicUser.Id, th.BasicUser.Email)
+		token, err := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
 		assert.Nil(t, err)
 
 		err = th.App.resetPasswordFromToken(th.Context, token.Token, "abcdefgh", model.GetMillisForTime(time.Now().Add(25*time.Hour)))
 		assert.NotNil(t, err)
 	})
+}
 
+func TestInvalidatePasswordRecoveryTokens(t *testing.T) {
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+
+	t.Run("remove manually added tokens", func(t *testing.T) {
+		for i := 0; i < 5; i++ {
+			token := model.NewToken(
+				TokenTypePasswordRecovery,
+				model.MapToJSON(map[string]string{"UserId": th.BasicUser.Id, "email": th.BasicUser.Email}),
+			)
+			require.NoError(t, th.App.Srv().Store().Token().Save(token))
+		}
+		tokens, err := th.App.Srv().Store().Token().GetAllTokensByType(TokenTypePasswordRecovery)
+		assert.NoError(t, err)
+		assert.Equal(t, 5, len(tokens))
+
+		appErr := th.App.InvalidatePasswordRecoveryTokensForUser(th.BasicUser.Id)
+		assert.Nil(t, appErr)
+
+		tokens, err = th.App.Srv().Store().Token().GetAllTokensByType(TokenTypePasswordRecovery)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(tokens))
+	})
+
+	t.Run("add multiple tokens, should only be one valid", func(t *testing.T) {
+		_, appErr := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
+		assert.Nil(t, appErr)
+
+		token, appErr := th.App.CreatePasswordRecoveryToken(th.Context, th.BasicUser.Id, th.BasicUser.Email)
+		assert.Nil(t, appErr)
+
+		tokens, err := th.App.Srv().Store().Token().GetAllTokensByType(TokenTypePasswordRecovery)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(tokens))
+		assert.Equal(t, token.Token, tokens[0].Token)
+	})
+}
+
+func TestPasswordChangeSessionTermination(t *testing.T) {
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+
+	t.Run("user-initiated password change with termination enabled", func(t *testing.T) {
+		th.App.UpdateConfig(func(c *model.Config) {
+			*c.ServiceSettings.TerminateSessionsOnPasswordChange = true
+		})
+
+		session, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		session2, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		th.Context.Session().UserId = th.BasicUser2.Id
+		th.Context.Session().Id = session.Id
+
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password2")
+		require.Nil(t, err)
+
+		session, err = th.App.GetSession(session.Token)
+		require.Nil(t, err)
+		require.False(t, session.IsExpired())
+
+		session2, err = th.App.GetSession(session2.Token)
+		require.NotNil(t, err)
+		require.Nil(t, session2)
+
+		// Cleanup
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password1")
+		require.Nil(t, err)
+		th.Context.Session().UserId = ""
+		th.Context.Session().Id = ""
+	})
+
+	t.Run("user-initiated password change with termination disabled", func(t *testing.T) {
+		th.App.UpdateConfig(func(c *model.Config) {
+			*c.ServiceSettings.TerminateSessionsOnPasswordChange = false
+		})
+
+		session, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		session2, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		th.Context.Session().UserId = th.BasicUser2.Id
+		th.Context.Session().Id = session.Id
+
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password2")
+		require.Nil(t, err)
+
+		session, err = th.App.GetSession(session.Token)
+		require.Nil(t, err)
+		require.False(t, session.IsExpired())
+
+		session2, err = th.App.GetSession(session2.Token)
+		require.Nil(t, err)
+		require.False(t, session2.IsExpired())
+
+		// Cleanup
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password1")
+		require.Nil(t, err)
+		th.Context.Session().UserId = ""
+		th.Context.Session().Id = ""
+	})
+
+	t.Run("admin-initiated password change with termination enabled", func(t *testing.T) {
+		th.App.UpdateConfig(func(c *model.Config) {
+			*c.ServiceSettings.TerminateSessionsOnPasswordChange = true
+		})
+
+		session, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		session2, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password2")
+		require.Nil(t, err)
+
+		session, err = th.App.GetSession(session.Token)
+		require.NotNil(t, err)
+		require.Nil(t, session)
+
+		session2, err = th.App.GetSession(session2.Token)
+		require.NotNil(t, err)
+		require.Nil(t, session2)
+
+		// Cleanup
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password1")
+		require.Nil(t, err)
+	})
+
+	t.Run("admin-initiated password change with termination disabled", func(t *testing.T) {
+		th.App.UpdateConfig(func(c *model.Config) {
+			*c.ServiceSettings.TerminateSessionsOnPasswordChange = false
+		})
+
+		session, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		session2, err := th.App.CreateSession(th.Context, &model.Session{
+			UserId: th.BasicUser2.Id,
+			Roles:  model.SystemUserRoleId,
+		})
+		require.Nil(t, err)
+
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password2")
+		require.Nil(t, err)
+
+		session, err = th.App.GetSession(session.Token)
+		require.Nil(t, err)
+		require.False(t, session.IsExpired())
+
+		session2, err = th.App.GetSession(session2.Token)
+		require.Nil(t, err)
+		require.False(t, session2.IsExpired())
+
+		// Cleanup
+		err = th.App.UpdatePassword(th.Context, th.BasicUser2, "Password1")
+		require.Nil(t, err)
+	})
 }
 
 func TestGetViewUsersRestrictions(t *testing.T) {
@@ -1157,7 +1438,8 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 	th.LinkUserToTeam(user1, team1)
 	th.LinkUserToTeam(user1, team2)
 
-	th.App.UpdateTeamMemberRoles(team1.Id, user1.Id, "team_user team_admin")
+	_, appErr := th.App.UpdateTeamMemberRoles(th.Context, team1.Id, user1.Id, "team_user team_admin")
+	require.Nil(t, appErr)
 
 	team1channel1 := th.CreateChannel(th.Context, team1)
 	team1channel2 := th.CreateChannel(th.Context, team1)
@@ -1174,9 +1456,12 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 	team2townsquare, err := th.App.GetChannelByName(th.Context, "town-square", team2.Id, false)
 	require.Nil(t, err)
 
-	th.App.AddUserToChannel(th.Context, user1, team1channel1, false)
-	th.App.AddUserToChannel(th.Context, user1, team1channel2, false)
-	th.App.AddUserToChannel(th.Context, user1, team2channel1, false)
+	_, appErr = th.App.AddUserToChannel(th.Context, user1, team1channel1, false)
+	require.Nil(t, appErr)
+	_, appErr = th.App.AddUserToChannel(th.Context, user1, team1channel2, false)
+	require.Nil(t, appErr)
+	_, appErr = th.App.AddUserToChannel(th.Context, user1, team2channel1, false)
+	require.Nil(t, appErr)
 
 	addPermission := func(role *model.Role, permission string) *model.AppError {
 		newPermissions := append(role.Permissions, permission)
@@ -1196,7 +1481,7 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 	}
 
 	t.Run("VIEW_MEMBERS permission granted at system level", func(t *testing.T) {
-		restrictions, err := th.App.GetViewUsersRestrictions(user1.Id)
+		restrictions, err := th.App.GetViewUsersRestrictions(th.Context, user1.Id)
 		require.Nil(t, err)
 
 		assert.Nil(t, restrictions)
@@ -1209,11 +1494,17 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 		require.Nil(t, err)
 
 		require.Nil(t, removePermission(systemUserRole, model.PermissionViewMembers.Id))
-		defer addPermission(systemUserRole, model.PermissionViewMembers.Id)
+		defer func() {
+			appErr := addPermission(systemUserRole, model.PermissionViewMembers.Id)
+			require.Nil(t, appErr)
+		}()
 		require.Nil(t, addPermission(teamUserRole, model.PermissionViewMembers.Id))
-		defer removePermission(teamUserRole, model.PermissionViewMembers.Id)
+		defer func() {
+			appErr := removePermission(teamUserRole, model.PermissionViewMembers.Id)
+			require.Nil(t, appErr)
+		}()
 
-		restrictions, err := th.App.GetViewUsersRestrictions(user1.Id)
+		restrictions, err := th.App.GetViewUsersRestrictions(th.Context, user1.Id)
 		require.Nil(t, err)
 
 		assert.NotNil(t, restrictions)
@@ -1227,9 +1518,12 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 		systemUserRole, err := th.App.GetRoleByName(context.Background(), model.SystemUserRoleId)
 		require.Nil(t, err)
 		require.Nil(t, removePermission(systemUserRole, model.PermissionViewMembers.Id))
-		defer addPermission(systemUserRole, model.PermissionViewMembers.Id)
+		defer func() {
+			appErr := addPermission(systemUserRole, model.PermissionViewMembers.Id)
+			require.Nil(t, appErr)
+		}()
 
-		restrictions, err := th.App.GetViewUsersRestrictions(user1.Id)
+		restrictions, err := th.App.GetViewUsersRestrictions(th.Context, user1.Id)
 		require.Nil(t, err)
 
 		assert.NotNil(t, restrictions)
@@ -1245,11 +1539,17 @@ func TestGetViewUsersRestrictions(t *testing.T) {
 		require.Nil(t, err)
 
 		require.Nil(t, removePermission(systemUserRole, model.PermissionViewMembers.Id))
-		defer addPermission(systemUserRole, model.PermissionViewMembers.Id)
+		defer func() {
+			appErr := addPermission(systemUserRole, model.PermissionViewMembers.Id)
+			require.Nil(t, appErr)
+		}()
 		require.Nil(t, addPermission(teamAdminRole, model.PermissionViewMembers.Id))
-		defer removePermission(teamAdminRole, model.PermissionViewMembers.Id)
+		defer func() {
+			appErr := removePermission(teamAdminRole, model.PermissionViewMembers.Id)
+			require.Nil(t, appErr)
+		}()
 
-		restrictions, err := th.App.GetViewUsersRestrictions(user1.Id)
+		restrictions, err := th.App.GetViewUsersRestrictions(th.Context, user1.Id)
 		require.Nil(t, err)
 
 		assert.NotNil(t, restrictions)
@@ -1289,7 +1589,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest := th.CreateGuest()
 		require.Equal(t, "system_guest", guest.Roles)
 		th.LinkUserToTeam(guest, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeGuest)
 		require.False(t, teamMember.SchemeUser)
@@ -1299,7 +1599,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest, err = th.App.GetUser(guest.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_user", guest.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeGuest)
 		assert.True(t, teamMember.SchemeUser)
@@ -1309,7 +1609,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest := th.CreateGuest()
 		require.Equal(t, "system_guest", guest.Roles)
 		th.LinkUserToTeam(guest, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeGuest)
 		require.False(t, teamMember.SchemeUser)
@@ -1323,7 +1623,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest, err = th.App.GetUser(guest.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_user", guest.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeGuest)
 		assert.True(t, teamMember.SchemeUser)
@@ -1337,7 +1637,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest := th.CreateGuest()
 		require.Equal(t, "system_guest", guest.Roles)
 		th.LinkUserToTeam(guest, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeGuest)
 		require.False(t, teamMember.SchemeUser)
@@ -1355,7 +1655,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest, err = th.App.GetUser(guest.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_user", guest.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeGuest)
 		assert.True(t, teamMember.SchemeUser)
@@ -1373,7 +1673,7 @@ func TestPromoteGuestToUser(t *testing.T) {
 		guest := th.CreateGuest()
 		require.Equal(t, "system_guest", guest.Roles)
 		th.LinkUserToTeam(guest, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, guest.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, guest.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeGuest)
 		require.False(t, teamMember.SchemeUser)
@@ -1404,7 +1704,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user := th.CreateUser()
 		require.Equal(t, "system_user", user.Roles)
 		th.LinkUserToTeam(user, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeUser)
 		require.False(t, teamMember.SchemeGuest)
@@ -1452,7 +1752,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user := th.CreateUser()
 		require.Equal(t, "system_user", user.Roles)
 		th.LinkUserToTeam(user, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeUser)
 		require.False(t, teamMember.SchemeGuest)
@@ -1462,7 +1762,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user, err = th.App.GetUser(user.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_guest", user.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeUser)
 		assert.True(t, teamMember.SchemeGuest)
@@ -1472,7 +1772,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user := th.CreateUser()
 		require.Equal(t, "system_user", user.Roles)
 		th.LinkUserToTeam(user, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeUser)
 		require.False(t, teamMember.SchemeGuest)
@@ -1486,7 +1786,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user, err = th.App.GetUser(user.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_guest", user.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeUser)
 		assert.True(t, teamMember.SchemeGuest)
@@ -1500,7 +1800,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user := th.CreateUser()
 		require.Equal(t, "system_user", user.Roles)
 		th.LinkUserToTeam(user, th.BasicTeam)
-		teamMember, err := th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeUser)
 		require.False(t, teamMember.SchemeGuest)
@@ -1518,7 +1818,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		user, err = th.App.GetUser(user.Id)
 		assert.Nil(t, err)
 		assert.Equal(t, "system_guest", user.Roles)
-		teamMember, err = th.App.GetTeamMember(th.BasicTeam.Id, user.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, th.BasicTeam.Id, user.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeUser)
 		assert.True(t, teamMember.SchemeGuest)
@@ -1539,9 +1839,10 @@ func TestDemoteUserToGuest(t *testing.T) {
 		team := th.CreateTeam()
 
 		th.LinkUserToTeam(user, team)
-		th.App.UpdateTeamMemberRoles(team.Id, user.Id, "team_user team_admin")
+		_, appErr := th.App.UpdateTeamMemberRoles(th.Context, team.Id, user.Id, "team_user team_admin")
+		require.Nil(t, appErr)
 
-		teamMember, err := th.App.GetTeamMember(team.Id, user.Id)
+		teamMember, err := th.App.GetTeamMember(th.Context, team.Id, user.Id)
 		require.Nil(t, err)
 		require.True(t, teamMember.SchemeUser)
 		require.True(t, teamMember.SchemeAdmin)
@@ -1550,7 +1851,8 @@ func TestDemoteUserToGuest(t *testing.T) {
 		channel := th.CreateChannel(th.Context, team)
 
 		th.AddUserToChannel(user, channel)
-		th.App.UpdateChannelMemberSchemeRoles(th.Context, channel.Id, user.Id, false, true, true)
+		_, appErr = th.App.UpdateChannelMemberSchemeRoles(th.Context, channel.Id, user.Id, false, true, true)
+		require.Nil(t, appErr)
 
 		channelMember, err := th.App.GetChannelMember(th.Context, channel.Id, user.Id)
 		assert.Nil(t, err)
@@ -1565,7 +1867,7 @@ func TestDemoteUserToGuest(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, "system_guest", user.Roles)
 
-		teamMember, err = th.App.GetTeamMember(team.Id, user.Id)
+		teamMember, err = th.App.GetTeamMember(th.Context, team.Id, user.Id)
 		assert.Nil(t, err)
 		assert.False(t, teamMember.SchemeUser)
 		assert.False(t, teamMember.SchemeAdmin)
@@ -1621,6 +1923,49 @@ func TestUpdateUserRolesWithUser(t *testing.T) {
 	// Test bad role.
 	_, err = th.App.UpdateUserRolesWithUser(th.Context, user, "does not exist", false)
 	require.NotNil(t, err)
+
+	//Test reset to User role
+	user, err = th.App.UpdateUserRolesWithUser(th.Context, user, model.SystemUserRoleId, false)
+	require.Nil(t, err)
+	assert.Equal(t, user.Roles, model.SystemUserRoleId)
+}
+
+func TestUpdateLastAdminUserRolesWithUser(t *testing.T) {
+	// InitBasic is used to let the first CreateUser call not be
+	// a system_admin
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+
+	t.Run("Cannot remove if only admin", func(t *testing.T) {
+		// Attempt to downgrade sysadmin.
+		user, appErr := th.App.UpdateUserRolesWithUser(th.Context, th.SystemAdminUser, model.SystemUserRoleId, false)
+		require.NotNil(t, appErr)
+		require.Nil(t, user)
+	})
+
+	t.Run("Cannot remove if only non-Bot admin", func(t *testing.T) {
+		bot := th.CreateBot()
+		user, appErr := th.App.UpdateUserRoles(th.Context, bot.UserId, model.SystemUserRoleId+" "+model.SystemAdminRoleId, false)
+		require.Nil(t, appErr)
+		require.NotNil(t, user)
+
+		// Attempt to downgrade sysadmin.
+		user, appErr = th.App.UpdateUserRolesWithUser(th.Context, th.SystemAdminUser, model.SystemUserRoleId, false)
+		require.NotNil(t, appErr)
+		require.Nil(t, user)
+	})
+
+	t.Run("Can remove if not only non-Bot admin", func(t *testing.T) {
+		systemAdminUser2 := th.CreateUser()
+		user, appErr := th.App.UpdateUserRoles(th.Context, systemAdminUser2.Id, model.SystemUserRoleId+" "+model.SystemAdminRoleId, false)
+		require.Nil(t, appErr)
+		require.NotNil(t, user)
+
+		// Attempt to downgrade sysadmin.
+		user, appErr = th.App.UpdateUserRolesWithUser(th.Context, th.SystemAdminUser, model.SystemUserRoleId, false)
+		require.Nil(t, appErr)
+		require.NotNil(t, user)
+	})
 }
 
 func TestDeactivateMfa(t *testing.T) {
@@ -1643,11 +1988,14 @@ func TestPatchUser(t *testing.T) {
 	defer th.TearDown()
 
 	testUser := th.CreateUser()
-	defer th.App.PermanentDeleteUser(th.Context, testUser)
+	defer func() {
+		appErr := th.App.PermanentDeleteUser(th.Context, testUser)
+		require.Nil(t, appErr)
+	}()
 
 	t.Run("Patch with a username already exists", func(t *testing.T) {
 		_, err := th.App.PatchUser(th.Context, testUser.Id, &model.UserPatch{
-			Username: model.NewString(th.BasicUser.Username),
+			Username: model.NewPointer(th.BasicUser.Username),
 		}, true)
 
 		require.NotNil(t, err)
@@ -1656,7 +2004,7 @@ func TestPatchUser(t *testing.T) {
 
 	t.Run("Patch with a email already exists", func(t *testing.T) {
 		_, err := th.App.PatchUser(th.Context, testUser.Id, &model.UserPatch{
-			Email: model.NewString(th.BasicUser.Email),
+			Email: model.NewPointer(th.BasicUser.Email),
 		}, true)
 
 		require.NotNil(t, err)
@@ -1664,17 +2012,17 @@ func TestPatchUser(t *testing.T) {
 	})
 
 	t.Run("Patch username with a new username", func(t *testing.T) {
-		_, err := th.App.PatchUser(th.Context, testUser.Id, &model.UserPatch{
-			Username: model.NewString(model.NewId()),
+		u, err := th.App.PatchUser(th.Context, testUser.Id, &model.UserPatch{
+			Username: model.NewPointer(model.NewUsername()),
 		}, true)
 
 		require.Nil(t, err)
+		require.Empty(t, u.Password)
 	})
 }
 
 func TestUpdateThreadReadForUser(t *testing.T) {
-
-	t.Run("Ensure thread membership is created and followed", func(t *testing.T) {
+	t.Run("Ensure thread membership exists before updating read", func(t *testing.T) {
 		th := Setup(t).InitBasic()
 		defer th.TearDown()
 		th.App.UpdateConfig(func(cfg *model.Config) {
@@ -1682,57 +2030,22 @@ func TestUpdateThreadReadForUser(t *testing.T) {
 			*cfg.ServiceSettings.CollapsedThreads = model.CollapsedThreadsDefaultOn
 		})
 
-		rootPost, appErr := th.App.CreatePost(th.Context, &model.Post{UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, false, false)
+		rootPost, appErr := th.App.CreatePost(th.Context, &model.Post{UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, model.CreatePostFlags{})
 		require.Nil(t, appErr)
-		replyPost, appErr := th.App.CreatePost(th.Context, &model.Post{RootId: rootPost.Id, UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, false, false)
+		replyPost, appErr := th.App.CreatePost(th.Context, &model.Post{RootId: rootPost.Id, UserId: th.BasicUser2.Id, CreateAt: model.GetMillis(), ChannelId: th.BasicChannel.Id, Message: "hi"}, th.BasicChannel, model.CreatePostFlags{})
 		require.Nil(t, appErr)
 		threads, appErr := th.App.GetThreadsForUser(th.BasicUser.Id, th.BasicTeam.Id, model.GetUserThreadsOpts{})
 		require.Nil(t, appErr)
 		require.Zero(t, threads.Total)
 
 		_, appErr = th.App.UpdateThreadReadForUser(th.Context, "currentSessionId", th.BasicUser.Id, th.BasicChannel.TeamId, rootPost.Id, replyPost.CreateAt)
-		require.Nil(t, appErr)
-
-		threads, appErr = th.App.GetThreadsForUser(th.BasicUser.Id, th.BasicTeam.Id, model.GetUserThreadsOpts{})
-		require.Nil(t, appErr)
-		assert.NotZero(t, threads.Total)
-
-		threadMembership, appErr := th.App.GetThreadMembershipForUser(th.BasicUser.Id, rootPost.Id)
-		require.Nil(t, appErr)
-		require.NotNil(t, threadMembership)
-		assert.True(t, threadMembership.Following)
-
-		_, appErr = th.App.GetThreadMembershipForUser(th.BasicUser.Id, "notfound")
 		require.NotNil(t, appErr)
-		assert.Equal(t, http.StatusNotFound, appErr.StatusCode)
-	})
 
-	t.Run("Ensure no panic on error", func(t *testing.T) {
-		th := SetupWithStoreMock(t)
-		defer th.TearDown()
-
-		mockStore := th.App.Srv().Store().(*storemocks.Store)
-		mockUserStore := storemocks.UserStore{}
-		mockUserStore.On("Count", mock.Anything).Return(int64(10), nil)
-		mockUserStore.On("Get", mock.Anything, "user1").Return(&model.User{Id: "user1"}, nil)
-
-		mockThreadStore := storemocks.ThreadStore{}
-		mockThreadStore.On("MaintainMembership", "user1", "postid", mock.Anything).Return(nil, errors.New("error"))
-
-		var err error
-		th.App.ch.srv.userService, err = users.New(users.ServiceConfig{
-			UserStore:    &mockUserStore,
-			SessionStore: &storemocks.SessionStore{},
-			OAuthStore:   &storemocks.OAuthStore{},
-			ConfigFn:     th.App.ch.srv.platform.Config,
-			LicenseFn:    th.App.ch.srv.License,
-		})
+		_, err := th.App.Srv().Store().Thread().MaintainMembership(th.BasicUser.Id, rootPost.Id, store.ThreadMembershipOpts{Following: true, UpdateFollowing: true})
 		require.NoError(t, err)
-		mockStore.On("User").Return(&mockUserStore)
-		mockStore.On("Thread").Return(&mockThreadStore)
 
-		_, err = th.App.UpdateThreadReadForUser(th.Context, "currentSessionId", "user1", "team1", "postid", 100)
-		require.Error(t, err)
+		_, appErr = th.App.UpdateThreadReadForUser(th.Context, "currentSessionId", th.BasicUser.Id, th.BasicChannel.TeamId, rootPost.Id, replyPost.CreateAt)
+		require.Nil(t, appErr)
 	})
 }
 
@@ -1741,117 +2054,54 @@ func TestCreateUserWithInitialPreferences(t *testing.T) {
 	defer th.TearDown()
 
 	t.Run("successfully create a user with initial tutorial and recommended steps preferences", func(t *testing.T) {
+		th.ConfigStore.SetReadOnlyFF(false)
+		defer th.ConfigStore.SetReadOnlyFF(true)
+
 		testUser := th.CreateUser()
-		defer th.App.PermanentDeleteUser(th.Context, testUser)
+		defer func() {
+			appErr := th.App.PermanentDeleteUser(th.Context, testUser)
+			require.Nil(t, appErr)
+		}()
 
-		insightsPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(testUser.Id, model.PreferenceCategoryInsights, model.PreferenceNameInsights)
-		require.Nil(t, appErr)
-		assert.Equal(t, "insights_tutorial_state", insightsPref.Name)
-		assert.Equal(t, "{\"insights_modal_viewed\":true}", insightsPref.Value)
-
-		tutorialStepPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(testUser.Id, model.PreferenceCategoryTutorialSteps, testUser.Id)
+		tutorialStepPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(th.Context, testUser.Id, model.PreferenceCategoryTutorialSteps, testUser.Id)
 		require.Nil(t, appErr)
 		assert.Equal(t, testUser.Id, tutorialStepPref.Name)
 
-		recommendedNextStepsPref, appErr := th.App.GetPreferenceByCategoryForUser(testUser.Id, model.PreferenceRecommendedNextSteps)
+		recommendedNextStepsPref, appErr := th.App.GetPreferenceByCategoryForUser(th.Context, testUser.Id, model.PreferenceRecommendedNextSteps)
 		require.Nil(t, appErr)
 		assert.Equal(t, model.PreferenceRecommendedNextSteps, recommendedNextStepsPref[0].Category)
 		assert.Equal(t, "hide", recommendedNextStepsPref[0].Name)
 		assert.Equal(t, "false", recommendedNextStepsPref[0].Value)
+
+		gmASdmNoticeViewedPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(th.Context, testUser.Id, model.PreferenceCategorySystemNotice, "GMasDM")
+		require.Nil(t, appErr)
+		assert.Equal(t, "GMasDM", gmASdmNoticeViewedPref.Name)
+		assert.Equal(t, "true", gmASdmNoticeViewedPref.Value)
 	})
 
-	t.Run("successfully create a user with insights feature flag disabled", func(t *testing.T) {
+	t.Run("successfully create a guest user with initial tutorial and recommended steps preferences", func(t *testing.T) {
 		th.Server.platform.SetConfigReadOnlyFF(false)
 		defer th.Server.platform.SetConfigReadOnlyFF(true)
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.FeatureFlags.InsightsEnabled = false })
-		defer th.App.UpdateConfig(func(cfg *model.Config) { cfg.FeatureFlags.InsightsEnabled = true })
-		testUser := th.CreateUser()
-		defer th.App.PermanentDeleteUser(th.Context, testUser)
-
-		insightsPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(testUser.Id, model.PreferenceCategoryInsights, model.PreferenceNameInsights)
-		require.Nil(t, appErr)
-		assert.Equal(t, "insights_tutorial_state", insightsPref.Name)
-		assert.Equal(t, "{\"insights_modal_viewed\":false}", insightsPref.Value)
-
-		recommendedNextStepsPref, appErr := th.App.GetPreferenceByCategoryForUser(testUser.Id, model.PreferenceRecommendedNextSteps)
-		require.Nil(t, appErr)
-		assert.Equal(t, model.PreferenceRecommendedNextSteps, recommendedNextStepsPref[0].Category)
-		assert.Equal(t, "hide", recommendedNextStepsPref[0].Name)
-		assert.Equal(t, "false", recommendedNextStepsPref[0].Value)
-	})
-
-	t.Run("successfully create a guest user with initial tutorial, insights and recommended steps preferences", func(t *testing.T) {
-		th.Server.platform.SetConfigReadOnlyFF(false)
-		defer th.Server.platform.SetConfigReadOnlyFF(true)
-		th.App.UpdateConfig(func(cfg *model.Config) { cfg.FeatureFlags.InsightsEnabled = true })
 		testUser := th.CreateGuest()
-		defer th.App.PermanentDeleteUser(th.Context, testUser)
+		defer func() {
+			appErr := th.App.PermanentDeleteUser(th.Context, testUser)
+			require.Nil(t, appErr)
+		}()
 
-		insightsPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(testUser.Id, model.PreferenceCategoryInsights, model.PreferenceNameInsights)
-		require.Nil(t, appErr)
-		assert.Equal(t, "insights_tutorial_state", insightsPref.Name)
-		assert.Equal(t, "{\"insights_modal_viewed\":true}", insightsPref.Value)
-
-		tutorialStepPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(testUser.Id, model.PreferenceCategoryTutorialSteps, testUser.Id)
+		tutorialStepPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(th.Context, testUser.Id, model.PreferenceCategoryTutorialSteps, testUser.Id)
 		require.Nil(t, appErr)
 		assert.Equal(t, testUser.Id, tutorialStepPref.Name)
 
-		recommendedNextStepsPref, appErr := th.App.GetPreferenceByCategoryForUser(testUser.Id, model.PreferenceRecommendedNextSteps)
+		recommendedNextStepsPref, appErr := th.App.GetPreferenceByCategoryForUser(th.Context, testUser.Id, model.PreferenceRecommendedNextSteps)
 		require.Nil(t, appErr)
 		assert.Equal(t, model.PreferenceRecommendedNextSteps, recommendedNextStepsPref[0].Category)
 		assert.Equal(t, "hide", recommendedNextStepsPref[0].Name)
 		assert.Equal(t, "false", recommendedNextStepsPref[0].Value)
-	})
-}
 
-func TestIsFirstAdmin(t *testing.T) {
-	t.Run("should return false if user is not sysadmin", func(t *testing.T) {
-		th := SetupWithStoreMock(t)
-		defer th.TearDown()
-
-		Id := model.NewId()
-		isFirstAdmin := th.App.IsFirstAdmin(&model.User{
-			Id:    Id,
-			Roles: model.SystemUserRoleId,
-		})
-		require.False(t, isFirstAdmin)
-	})
-
-	t.Run("should return false if user is sysadmin but not the first one", func(t *testing.T) {
-		th := SetupWithStoreMock(t)
-		defer th.TearDown()
-
-		Id := model.NewId()
-
-		mockUserStore := storemocks.UserStore{}
-		mockUserStore.On("GetFirstSystemAdminID").Return(model.NewId(), nil)
-
-		mockStore := th.App.Srv().Store().(*storemocks.Store)
-		mockStore.On("User").Return(&mockUserStore)
-
-		isFirstAdmin := th.App.IsFirstAdmin(&model.User{
-			Id:    Id,
-			Roles: model.SystemAdminRoleId,
-		})
-		require.False(t, isFirstAdmin)
-	})
-
-	t.Run("should return true if user is sysadmin and the first one", func(t *testing.T) {
-		th := SetupWithStoreMock(t)
-		defer th.TearDown()
-
-		Id := model.NewId()
-
-		mockStore := th.App.Srv().Store().(*storemocks.Store)
-		mockUserStore := storemocks.UserStore{}
-		mockUserStore.On("GetFirstSystemAdminID").Return(Id, nil)
-		mockStore.On("User").Return(&mockUserStore)
-
-		isFirstAdmin := th.App.IsFirstAdmin(&model.User{
-			Id:    Id,
-			Roles: model.SystemAdminRoleId,
-		})
-		require.True(t, isFirstAdmin)
+		gmASdmNoticeViewedPref, appErr := th.App.GetPreferenceByCategoryAndNameForUser(th.Context, testUser.Id, model.PreferenceCategorySystemNotice, "GMasDM")
+		require.Nil(t, appErr)
+		assert.Equal(t, "GMasDM", gmASdmNoticeViewedPref.Name)
+		assert.Equal(t, "true", gmASdmNoticeViewedPref.Value)
 	})
 }
 
@@ -1934,4 +2184,237 @@ func TestSendSubscriptionHistoryEvent(t *testing.T) {
 		require.Equal(t, subscription.ID, subscriptionHistoryEvent.SubscriptionID, "subscription ID doesn't match")
 		require.Equal(t, 10, subscriptionHistoryEvent.Seats, "Number of seats doesn't match")
 	})
+}
+
+func TestGetUsersForReporting(t *testing.T) {
+	t.Run("should throw error on invalid date range", func(t *testing.T) {
+		th := Setup(t).InitBasic()
+		defer th.TearDown()
+
+		userReports, err := th.App.GetUsersForReporting(&model.UserReportOptions{
+			ReportingBaseOptions: model.ReportingBaseOptions{
+				SortColumn: "Username",
+				PageSize:   50,
+				StartAt:    1000,
+				EndAt:      500,
+			},
+		})
+		require.NotNil(t, err)
+		require.Nil(t, userReports)
+	})
+
+	t.Run("should throw error on bad sort column", func(t *testing.T) {
+		th := Setup(t).InitBasic()
+		defer th.TearDown()
+
+		userReports, err := th.App.GetUsersForReporting(&model.UserReportOptions{
+			ReportingBaseOptions: model.ReportingBaseOptions{
+				SortColumn: "FakeColumn",
+				PageSize:   50,
+			},
+		})
+		require.NotNil(t, err)
+		require.Nil(t, userReports)
+	})
+
+	t.Run("should return some formatted reporting data", func(t *testing.T) {
+		th := SetupWithStoreMock(t)
+		defer th.TearDown()
+
+		// Mock to get the user count
+		mockStore := th.App.Srv().Store().(*storemocks.Store)
+		mockUserStore := storemocks.UserStore{}
+		mockUserStore.On("GetUserReport",
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+			mock.Anything,
+		).Return([]*model.UserReportQuery{
+			{
+				User: model.User{
+					Id:        "some-id",
+					CreateAt:  1000,
+					FirstName: "Bob",
+					LastName:  "Bobson",
+					LastLogin: 1500,
+				},
+			},
+		}, nil)
+
+		mockStore.On("User").Return(&mockUserStore)
+
+		userReports, err := th.App.GetUsersForReporting(&model.UserReportOptions{
+			ReportingBaseOptions: model.ReportingBaseOptions{
+				SortColumn: "Username",
+				PageSize:   50,
+			},
+		})
+		require.Nil(t, err)
+		require.NotNil(t, userReports)
+	})
+}
+
+func TestCreateUserOrGuest(t *testing.T) {
+	t.Run("base case - you can create a user", func(t *testing.T) {
+		th := Setup(t)
+		defer th.TearDown()
+
+		user := &model.User{
+			Email:         "TestCreateUserOrGuest@example.com",
+			Username:      "username_123",
+			Nickname:      "nn_username_123",
+			Password:      "Password1",
+			EmailVerified: true,
+		}
+		createdUser, appErr := th.App.createUserOrGuest(th.Context, user, false)
+		require.Nil(t, appErr)
+		require.Equal(t, "username_123", createdUser.Username)
+	})
+
+	t.Run("cannot create user when user count has exceeded the permissible limit", func(t *testing.T) {
+		th := SetupWithStoreMock(t)
+		defer th.TearDown()
+
+		mockUserStore := storemocks.UserStore{}
+		mockUserStore.On("Count", mock.Anything).Return(int64(12000), nil)
+
+		mockStore := th.App.Srv().Store().(*storemocks.Store)
+		mockStore.On("User").Return(&mockUserStore)
+
+		user := &model.User{
+			Email:         "TestCreateUserOrGuest@example.com",
+			Username:      "username_123",
+			Nickname:      "nn_username_123",
+			Password:      "Password1",
+			EmailVerified: true,
+		}
+		createdUser, appErr := th.App.createUserOrGuest(th.Context, user, false)
+		require.NotNil(t, appErr)
+		require.Nil(t, createdUser)
+	})
+
+	t.Run("can create user when server is exactly on limit", func(t *testing.T) {
+		th := SetupWithStoreMock(t)
+		defer th.TearDown()
+
+		id := NewTestId()
+		userCreationMocks(t, th, id, 11000)
+
+		user := &model.User{
+			Email:         "TestCreateUserOrGuest@example.com",
+			Username:      "username_123",
+			Nickname:      "nn_username_123",
+			Password:      "Password1",
+			EmailVerified: true,
+		}
+		createdUser, appErr := th.App.createUserOrGuest(th.Context, user, false)
+		require.Nil(t, appErr)
+		require.Equal(t, "username_123", createdUser.Username)
+	})
+
+	t.Run("licensed server can create user when server is OVER limit", func(t *testing.T) {
+		th := SetupWithStoreMock(t)
+		defer th.TearDown()
+
+		id := NewTestId()
+		userCreationMocks(t, th, id, 20000)
+
+		user := &model.User{
+			Email:         "TestCreateUserOrGuest@example.com",
+			Username:      "username_123",
+			Nickname:      "nn_username_123",
+			Password:      "Password1",
+			EmailVerified: true,
+		}
+
+		th.App.Srv().SetLicense(model.NewTestLicense(""))
+		createdUser, appErr := th.App.createUserOrGuest(th.Context, user, false)
+		require.Nil(t, appErr)
+		require.Equal(t, "username_123", createdUser.Username)
+	})
+
+	t.Run("licensed server can create user when server is UNDER limit", func(t *testing.T) {
+		th := SetupWithStoreMock(t)
+		defer th.TearDown()
+
+		id := NewTestId()
+		userCreationMocks(t, th, id, 10)
+
+		user := &model.User{
+			Email:         "TestCreateUserOrGuest@example.com",
+			Username:      "username_123",
+			Nickname:      "nn_username_123",
+			Password:      "Password1",
+			EmailVerified: true,
+		}
+
+		th.App.Srv().SetLicense(model.NewTestLicense(""))
+		createdUser, appErr := th.App.createUserOrGuest(th.Context, user, false)
+		require.Nil(t, appErr)
+		require.Equal(t, "username_123", createdUser.Username)
+	})
+}
+
+func userCreationMocks(t *testing.T, th *TestHelper, userID string, activeUserCount int64) {
+	mockUserStore := storemocks.UserStore{}
+	mockUserStore.On("Count", mock.Anything).Return(activeUserCount, nil)
+	mockUserStore.On("IsEmpty", mock.Anything).Return(false, nil)
+	mockUserStore.On("VerifyEmail", mock.Anything, "TestCreateUserOrGuest@example.com").Return("", nil)
+	mockUserStore.On("InvalidateProfilesInChannelCacheByUser", mock.Anything).Return()
+	mockUserStore.On("InvalidateProfileCacheForUser", mock.Anything).Return()
+	mockUserStore.On("Save", mock.Anything, mock.Anything).Return(&model.User{
+		Id:            userID,
+		Email:         "TestCreateUserOrGuest@example.com",
+		Username:      "username_123",
+		Nickname:      "nn_username_123",
+		Password:      "Password1",
+		EmailVerified: true,
+	}, nil)
+
+	mockUserStore.On("Get", mock.Anything, userID).Return(&model.User{
+		Id:            userID,
+		Email:         "TestCreateUserOrGuest@example.com",
+		Username:      "username_123",
+		Nickname:      "nn_username_123",
+		Password:      "Password1",
+		EmailVerified: true,
+	}, nil)
+
+	mockGroupStore := storemocks.GroupStore{}
+	mockGroupStore.On("GetByName", "username_123", mock.Anything).Return(nil, nil)
+
+	mockChannelStore := storemocks.ChannelStore{}
+	mockChannelStore.On("InvalidateAllChannelMembersForUser", mock.Anything).Return()
+
+	mockPreferencesStore := storemocks.PreferenceStore{}
+	mockPreferencesStore.On("Save", mock.Anything).Return(nil)
+
+	mockProductNoticeStore := storemocks.ProductNoticesStore{}
+	mockProductNoticeStore.On("View", userID, mock.Anything).Return(nil)
+
+	mockStore := th.App.Srv().Store().(*storemocks.Store)
+	mockStore.On("User").Return(&mockUserStore)
+	mockStore.On("Group").Return(&mockGroupStore)
+	mockStore.On("Channel").Return(&mockChannelStore)
+	mockStore.On("Preference").Return(&mockPreferencesStore)
+	mockStore.On("ProductNotices").Return(&mockProductNoticeStore)
+
+	var err error
+	th.App.ch.srv.userService, err = users.New(users.ServiceConfig{
+		UserStore:    &mockUserStore,
+		SessionStore: &storemocks.SessionStore{},
+		OAuthStore:   &storemocks.OAuthStore{},
+		ConfigFn:     th.App.ch.srv.platform.Config,
+		LicenseFn:    th.App.ch.srv.License,
+	})
+
+	require.NoError(t, err)
 }

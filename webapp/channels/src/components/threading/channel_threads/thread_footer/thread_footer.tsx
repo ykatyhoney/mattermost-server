@@ -5,26 +5,27 @@ import React, {memo, useCallback, useEffect, useMemo} from 'react';
 import {FormattedMessage} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
 
-import {Post} from '@mattermost/types/posts';
-import {threadIsSynthetic, UserThread} from '@mattermost/types/threads';
+import type {Post} from '@mattermost/types/posts';
+import type {UserThread} from '@mattermost/types/threads';
+import {threadIsSynthetic} from '@mattermost/types/threads';
 
 import {setThreadFollow, getThread as fetchThread} from 'mattermost-redux/actions/threads';
-import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
-import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {makeGetThreadOrSynthetic} from 'mattermost-redux/selectors/entities/threads';
 import {getPost} from 'mattermost-redux/selectors/entities/posts';
+import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
+import {makeGetThreadOrSynthetic} from 'mattermost-redux/selectors/entities/threads';
+import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
 
-import {GlobalState} from 'types/store';
-
-import {selectPost} from 'actions/views/rhs';
 import {trackEvent} from 'actions/telemetry_actions';
+import {selectPost} from 'actions/views/rhs';
 
-import Avatars from 'components/widgets/users/avatars';
-import Timestamp from 'components/timestamp';
-import SimpleTooltip from 'components/widgets/simple_tooltip';
 import Button from 'components/threading/common/button';
 import FollowButton from 'components/threading/common/follow_button';
 import {THREADING_TIME} from 'components/threading/common/options';
+import Timestamp from 'components/timestamp';
+import Avatars from 'components/widgets/users/avatars';
+import WithTooltip from 'components/with_tooltip';
+
+import type {GlobalState} from 'types/store';
 
 import './thread_footer.scss';
 
@@ -59,6 +60,7 @@ function ThreadFooter({
             channel_id: channelId,
         },
     } = thread;
+
     const participantIds = useMemo(() => (participants || []).map(({id}) => id).reverse(), [participants]);
 
     const handleReply = useCallback((e) => {
@@ -70,7 +72,7 @@ function ThreadFooter({
         trackEvent('crt', 'replied_using_footer');
         e.stopPropagation();
         dispatch(selectPost({id: threadId, channel_id: channelId} as Post));
-    }, [dispatch, replyClick, threadId, channelId]);
+    }, [replyClick, threadId, channelId]);
 
     const handleFollowing = useCallback((e) => {
         e.stopPropagation();
@@ -82,9 +84,8 @@ function ThreadFooter({
             {!isFollowing || threadIsSynthetic(thread) || !thread.unread_replies ? (
                 <div className='indicator'/>
             ) : (
-                <SimpleTooltip
-                    id='threadFooterIndicator'
-                    content={
+                <WithTooltip
+                    title={
                         <FormattedMessage
                             id='threading.numNewMessages'
                             defaultMessage='{newReplies, plural, =0 {no unread messages} =1 {one unread message} other {# unread messages}}'
@@ -98,7 +99,7 @@ function ThreadFooter({
                     >
                         <div className='dot-unreads'/>
                     </div>
-                </SimpleTooltip>
+                </WithTooltip>
             )}
 
             {participantIds && participantIds.length > 0 ? (

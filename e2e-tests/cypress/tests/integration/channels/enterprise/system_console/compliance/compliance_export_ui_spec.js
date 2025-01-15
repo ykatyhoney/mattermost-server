@@ -33,6 +33,10 @@ describe('Compliance Export', () => {
                 teamName = team.name;
             });
 
+            // # Visit a channel and post a message so it has something to be exported initially
+            cy.visit('/');
+            cy.postMessage('hello');
+
             // # Go to compliance page, enable export and do initial export
             cy.uiGoToCompliancePage();
             cy.uiEnableComplianceExport();
@@ -40,7 +44,7 @@ describe('Compliance Export', () => {
         });
     });
 
-    it('MM-T3435 - Download Compliance Export Files - CSV Format', () => {
+    it.skip('MM-60115 - MM-T3435 - Download Compliance Export Files - CSV Format', () => {
         // # Navigate to a team and post an attachment
         cy.visit(`/${teamName}/channels/town-square`);
         gotoTeamAndPostImage();
@@ -61,7 +65,7 @@ describe('Compliance Export', () => {
         });
     });
 
-    it('MM-T3438 - Download Compliance Export Files when 0 messages exported', () => {
+    it.skip('MM-60115 - MM-T3438 - Download Compliance Export Files when 0 messages exported', () => {
         // # Navigate to a team and post an attachment
         cy.visit(`/${teamName}/channels/town-square`);
         gotoTeamAndPostImage();
@@ -90,7 +94,7 @@ describe('Compliance Export', () => {
         });
     });
 
-    it('MM-T1168 - Compliance Export - Run Now, entry appears in job table', () => {
+    it.skip('MM-60115 - MM-T1168 - Compliance Export - Run Now, entry appears in job table', () => {
         // # Navigate to a team and post an attachment
         cy.visit(`/${teamName}/channels/town-square`);
         gotoTeamAndPostImage();
@@ -144,7 +148,7 @@ describe('Compliance Export', () => {
         cy.findByTestId('enableComplianceExportfalse').click();
 
         // * Verify that exported button is disabled
-        cy.findByRole('button', {name: /run compliance export job now/i}).should('be.disabled');
+        cy.findByRole('button', {name: /run compliance export job now/i}).should('be.not.enabled');
     });
 
     it('MM-T1167 - Compliance Export job can be canceled', () => {

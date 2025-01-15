@@ -1,32 +1,35 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React from 'react';
-
 import {FormattedMessage} from 'react-intl';
 
-import classNames from 'classnames';
+import type {Post} from '@mattermost/types/posts';
+import type {UserProfile} from '@mattermost/types/users';
 
+import {General} from 'mattermost-redux/constants';
+import {ensureString} from 'mattermost-redux/utils/post_utils';
+
+import FileAttachmentListContainer from 'components/file_attachment_list';
+import PriorityLabel from 'components/post_priority/post_priority_label';
+import PostAttachmentOpenGraph from 'components/post_view/post_attachment_opengraph';
+import PostMessageView from 'components/post_view/post_message_view';
+import Timestamp from 'components/timestamp';
 import UserProfileComponent from 'components/user_profile';
-import {UserProfile} from '@mattermost/types/users';
+import MattermostLogo from 'components/widgets/icons/mattermost_logo';
 import Avatar from 'components/widgets/users/avatar';
+
+import {Constants} from 'utils/constants';
 import * as PostUtils from 'utils/post_utils';
 import * as Utils from 'utils/utils';
-import PostMessageView from 'components/post_view/post_message_view';
-import PriorityLabel from 'components/post_priority/post_priority_label';
 
-import Timestamp from 'components/timestamp';
 import PostAttachmentContainer from '../post_attachment_container/post_attachment_container';
-import FileAttachmentListContainer from 'components/file_attachment_list';
-import PostAttachmentOpenGraph from 'components/post_view/post_attachment_opengraph';
 
-import MattermostLogo from 'components/widgets/icons/mattermost_logo';
-import {Constants} from 'utils/constants';
-import {General} from 'mattermost-redux/constants';
-
-import {OwnProps} from './index';
+import type {OwnProps} from './index';
 
 export type Props = OwnProps & {
+    previewPost?: Post;
     currentTeamUrl: string;
     channelDisplayName?: string;
     user: UserProfile | null;
@@ -53,12 +56,8 @@ const PostMessagePreview = (props: Props) => {
     const getPostIconURL = (defaultURL: string, fromAutoResponder: boolean, fromWebhook: boolean): string => {
         const {enablePostIconOverride, hasImageProxy, previewPost} = props;
         const postProps = previewPost?.props;
-        let postIconOverrideURL = '';
-        let useUserIcon = '';
-        if (postProps) {
-            postIconOverrideURL = postProps.override_icon_url;
-            useUserIcon = postProps.use_user_icon;
-        }
+        const postIconOverrideURL = ensureString(postProps?.override_icon_url);
+        const useUserIcon = ensureString(postProps?.use_user_icon);
 
         if (!fromAutoResponder && fromWebhook && !useUserIcon && enablePostIconOverride) {
             if (postIconOverrideURL && postIconOverrideURL !== '') {
@@ -154,6 +153,8 @@ const PostMessagePreview = (props: Props) => {
         </div>
     ) : null;
 
+    const overwriteName = ensureString(previewPost.props?.override_username);
+
     return (
         <PostAttachmentContainer
             className='permalink'
@@ -171,10 +172,9 @@ const PostMessagePreview = (props: Props) => {
                     </div>
                     <div className={classNames('col col__name', 'permalink--username')}>
                         <UserProfileComponent
-                            userId={user?.id}
-                            hasMention={true}
+                            userId={user?.id ?? ''}
                             disablePopover={true}
-                            overwriteName={previewPost.props?.override_username || ''}
+                            overwriteName={overwriteName}
                         />
                     </div>
                     <div className='col d-flex align-items-center'>

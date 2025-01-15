@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const (
@@ -95,15 +95,17 @@ func TestService_sendProfileImageToRemote(t *testing.T) {
 
 	user := &model.User{
 		Id:       model.NewId(),
-		RemoteId: model.NewString(rc.RemoteId),
+		RemoteId: model.NewPointer(rc.RemoteId),
 	}
 
 	provider := testImageProvider{}
 
-	mockServer := newMockServer(makeRemoteClusters(NumRemotes, ts.URL))
-	defer mockServer.Shutdown()
+	mockServer := newMockServer(t, makeRemoteClusters(NumRemotes, ts.URL, false))
 	mockServer.SetUser(user)
-	service, err := NewRemoteClusterService(mockServer)
+
+	mockApp := newMockApp(t, nil)
+
+	service, err := NewRemoteClusterService(mockServer, mockApp)
 	require.NoError(t, err)
 
 	err = service.Start()

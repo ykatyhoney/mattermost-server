@@ -2,11 +2,8 @@
 // See LICENSE.txt for license information.
 
 import classNames from 'classnames';
-
-import {isNil} from 'lodash';
-
+import isNil from 'lodash/isNil';
 import React from 'react';
-
 import {FormattedMessage} from 'react-intl';
 
 import ConfirmModal from 'components/confirm_modal';
@@ -85,13 +82,9 @@ State
         let dropDown = null;
         if (!isNil(schemeAdmin)) {
             let currentRole = member;
-            let roleToBe = this.props.type.includes('team') ?
-                teamAdmin :
-                channelAdmin;
+            let roleToBe = this.props.type.includes('team') ? teamAdmin : channelAdmin;
             if (schemeAdmin) {
-                currentRole = this.props.type.includes('team') ?
-                    teamAdmin :
-                    channelAdmin;
+                currentRole = this.props.type.includes('team') ? teamAdmin : channelAdmin;
                 roleToBe = member;
             }
             dropDown = (
@@ -106,10 +99,10 @@ State
                         <Menu
                             openLeft={true}
                             openUp={true}
-                            ariaLabel={localizeMessage(
-                                'admin.team_channel_settings.group_row.memberRole',
-                                'Member Role',
-                            )}
+                            ariaLabel={localizeMessage({
+                                id: 'admin.team_channel_settings.group_row.memberRole',
+                                defaultMessage: 'Member Role',
+                            })}
                             id={`${name}_change_role_options`}
                         >
                             <Menu.ItemAction
@@ -134,9 +127,7 @@ State
                 <i
                     className={
                         'fa ' +
-                        (this.props.collapsed ?
-                            'fa-caret-right' :
-                            'fa-caret-down')
+                        (this.props.collapsed ? 'fa-caret-right' : 'fa-caret-down')
                     }
                     onClick={this.toggleCollapse}
                 />
@@ -246,7 +237,7 @@ State
                 <td className='text-right'>
                     <button
                         type='button'
-                        className='btn btn-link'
+                        className='btn btn-tertiary'
                         onClick={() =>
                             this.setState({showConfirmationModal: true})
                         }

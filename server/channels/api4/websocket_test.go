@@ -4,6 +4,7 @@
 package api4
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,9 +15,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/testlib"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/testlib"
 )
 
 func TestWebSocketTrailingSlash(t *testing.T) {
@@ -141,7 +142,7 @@ func TestCreateDirectChannelWithSocket(t *testing.T) {
 
 	for _, user := range users {
 		time.Sleep(100 * time.Millisecond)
-		_, _, err := client.CreateDirectChannel(th.BasicUser.Id, user.Id)
+		_, _, err := client.CreateDirectChannel(context.Background(), th.BasicUser.Id, user.Id)
 		require.NoError(t, err, "failed to create DM channel")
 	}
 
@@ -257,7 +258,8 @@ func TestWebSocketSendBinary(t *testing.T) {
 
 	time.Sleep(1000 * time.Millisecond)
 
-	WebSocketClient.SendBinaryMessage("get_statuses", nil)
+	err = WebSocketClient.SendBinaryMessage("get_statuses", nil)
+	require.NoError(t, err)
 	resp = <-WebSocketClient.ResponseChannel
 	require.Nil(t, resp.Error, resp.Error)
 	require.Equal(t, resp.SeqReply, WebSocketClient.Sequence-1)
@@ -269,9 +271,10 @@ func TestWebSocketSendBinary(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, model.StatusOnline, status)
 
-	WebSocketClient.SendBinaryMessage("get_statuses_by_ids", map[string]any{
+	err = WebSocketClient.SendBinaryMessage("get_statuses_by_ids", map[string]any{
 		"user_ids": []string{th.BasicUser2.Id},
 	})
+	require.NoError(t, err)
 	status, ok = resp.Data[th.BasicUser2.Id]
 	require.True(t, ok)
 	require.Equal(t, model.StatusOnline, status)
@@ -291,23 +294,24 @@ func TestWebSocketStatuses(t *testing.T) {
 	require.Equal(t, resp.Status, model.StatusOk, "should have responded OK to authentication challenge")
 
 	team := model.Team{DisplayName: "Name", Name: "z-z-" + model.NewRandomTeamName() + "a", Email: "test@nowhere.com", Type: model.TeamOpen}
-	rteam, _, _ := client.CreateTeam(&team)
+	rteam, _, _ := client.CreateTeam(context.Background(), &team)
 
 	user := model.User{Email: strings.ToLower(model.NewId()) + "success+test@simulator.amazonses.com", Nickname: "Corey Hulen", Password: "passwd1"}
-	ruser, _, err := client.CreateUser(&user)
+	ruser, _, err := client.CreateUser(context.Background(), &user)
 	require.NoError(t, err)
 	th.LinkUserToTeam(ruser, rteam)
 	_, err = th.App.Srv().Store().User().VerifyEmail(ruser.Id, ruser.Email)
 	require.NoError(t, err)
 
 	user2 := model.User{Email: strings.ToLower(model.NewId()) + "success+test@simulator.amazonses.com", Nickname: "Corey Hulen", Password: "passwd1"}
-	ruser2, _, err := client.CreateUser(&user2)
+	ruser2, _, err := client.CreateUser(context.Background(), &user2)
 	require.NoError(t, err)
 	th.LinkUserToTeam(ruser2, rteam)
 	_, err = th.App.Srv().Store().User().VerifyEmail(ruser2.Id, ruser2.Email)
 	require.NoError(t, err)
 
-	client.Login(user.Email, user.Password)
+	_, _, err = client.Login(context.Background(), user.Email, user.Password)
+	require.NoError(t, err)
 
 	th.LoginBasic2()
 
@@ -416,18 +420,53 @@ func TestWebSocketStatuses(t *testing.T) {
 	require.True(t, awayHit, "didn't get away event")
 
 	time.Sleep(500 * time.Millisecond)
+}
 
-	WebSocketClient.Close()
+func TestWebSocketPresence(t *testing.T) {
+	th := Setup(t).InitBasic()
+	defer th.TearDown()
+
+	wsClient, err := th.CreateWebSocketClient()
+	require.NoError(t, err)
+	defer wsClient.Close()
+	wsClient.Listen()
+
+	resp := <-wsClient.ResponseChannel
+	require.Equal(t, resp.Status, model.StatusOk, "should have responded OK to authentication challenge")
+
+	wsClient.UpdateActiveChannel("chID")
+	resp = <-wsClient.ResponseChannel
+	require.Nil(t, resp.Error)
+	require.Equal(t, resp.SeqReply, wsClient.Sequence-1, "bad sequence number")
+
+	wsClient.UpdateActiveTeam("teamID")
+	resp = <-wsClient.ResponseChannel
+	require.Nil(t, resp.Error)
+	require.Equal(t, resp.SeqReply, wsClient.Sequence-1, "bad sequence number")
+
+	wsClient.UpdateActiveThread(true, "threadID")
+	resp = <-wsClient.ResponseChannel
+	require.Nil(t, resp.Error)
+	require.Equal(t, resp.SeqReply, wsClient.Sequence-1, "bad sequence number")
+
+	wsClient.UpdateActiveThread(false, "threadID")
+	resp = <-wsClient.ResponseChannel
+	require.Nil(t, resp.Error)
+	require.Equal(t, resp.SeqReply, wsClient.Sequence-1, "bad sequence number")
 }
 
 func TestWebSocketUpgrade(t *testing.T) {
 	th := Setup(t)
 	defer th.TearDown()
 
+	buffer := &mlog.Buffer{}
+	err := mlog.AddWriterTarget(th.TestLogger, buffer, true, mlog.StdAll...)
+	require.NoError(t, err)
+
 	url := fmt.Sprintf("http://localhost:%v", th.App.Srv().ListenAddr.Port) + model.APIURLSuffix + "/websocket"
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 	require.Equal(t, resp.StatusCode, http.StatusBadRequest)
 	require.NoError(t, th.TestLogger.Flush())
-	testlib.AssertLog(t, th.LogBuffer, mlog.LvlDebug.Name, "Failed to upgrade websocket connection.")
+	testlib.AssertLog(t, buffer, mlog.LvlDebug.Name, "URL Blocked because of CORS. Url: ")
 }

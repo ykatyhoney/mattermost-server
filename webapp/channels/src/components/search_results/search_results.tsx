@@ -1,39 +1,34 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {useEffect, useRef, useState} from 'react';
-import {MessageDescriptor, useIntl, FormattedMessage} from 'react-intl';
-import {useSelector} from 'react-redux';
-import Scrollbars from 'react-custom-scrollbars';
 import classNames from 'classnames';
+import React, {useEffect, useRef, useState} from 'react';
+import Scrollbars from 'react-custom-scrollbars';
+import {useIntl, FormattedMessage, defineMessage} from 'react-intl';
+import {useSelector} from 'react-redux';
+
+import type {FileSearchResultItem as FileSearchResultItemType} from '@mattermost/types/files';
+import type {Post} from '@mattermost/types/posts';
 
 import {debounce} from 'mattermost-redux/actions/helpers';
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
 
 import {getFilesDropdownPluginMenuItems} from 'selectors/plugins';
 
-import SearchResultsHeader from 'components/search_results_header';
-import SearchHint from 'components/search_hint/search_hint';
-import LoadingSpinner from 'components/widgets/loading/loading_wrapper';
-import NoResultsIndicator from 'components/no_results_indicator/no_results_indicator';
-import FlagIcon from 'components/widgets/icons/flag_icon';
 import FileSearchResultItem from 'components/file_search_results';
+import NoResultsIndicator from 'components/no_results_indicator/no_results_indicator';
 import {NoResultsVariant} from 'components/no_results_indicator/types';
+import SearchHint from 'components/search_hint/search_hint';
+import SearchResultsHeader from 'components/search_results_header';
+import LoadingWrapper from 'components/widgets/loading/loading_wrapper';
 
-import * as Utils from 'utils/utils';
-import {searchHintOptions, DataSearchTypes, Locations} from 'utils/constants';
+import {searchHintOptions, DataSearchTypes} from 'utils/constants';
 import {isFileAttachmentsEnabled} from 'utils/file_utils';
-import {t} from 'utils/i18n';
 
-import {Post} from '@mattermost/types/posts';
-import {FileSearchResultItem as FileSearchResultItemType} from '@mattermost/types/files';
-
-import PostComponent from 'components/post';
-
-import MessageOrFileSelector from './messages_or_files_selector';
 import FilesFilterMenu from './files_filter_menu';
+import MessageOrFileSelector from './messages_or_files_selector';
+import PostSearchResultsItem from './post_search_results_item';
 import SearchLimitsBanner from './search_limits_banner';
-
 import type {Props} from './types';
 
 import './search_results.scss';
@@ -97,6 +92,10 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
     }, [props.searchTerms]);
 
     useEffect(() => {
+        setSearchType(props.searchSelectedType);
+    }, [props.searchSelectedType]);
+
+    useEffect(() => {
         // reset search type when switching views
         setSearchType(props.searchType);
     }, [props.isFlaggedPosts, props.isPinnedPosts, props.isMentionSearch]);
@@ -126,6 +125,10 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
                 }
             }
         }
+    };
+
+    const setSearchTeam = (teamId: string): void => {
+        props.updateSearchTeam(teamId);
     };
 
     const loadMorePosts = debounce(
@@ -180,7 +183,7 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
 
     let sortedResults: any = results;
 
-    const titleDescriptor: MessageDescriptor = {};
+    let titleDescriptor;
     const noResultsProps: NoResultsProps = {
         variant: NoResultsVariant.ChannelSearch,
     };
@@ -188,23 +191,36 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
     if (isMentionSearch) {
         noResultsProps.variant = NoResultsVariant.Mentions;
 
-        titleDescriptor.id = t('search_header.title2');
-        titleDescriptor.defaultMessage = 'Recent Mentions';
+        titleDescriptor = defineMessage({
+            id: 'search_header.title2',
+            defaultMessage: 'Recent Mentions',
+        });
     } else if (isFlaggedPosts) {
         noResultsProps.variant = NoResultsVariant.FlaggedPosts;
-        noResultsProps.subtitleValues = {icon: <FlagIcon className='icon  no-results__mini_icon'/>};
-
-        titleDescriptor.id = t('search_header.title3');
-        titleDescriptor.defaultMessage = 'Saved Posts';
+        noResultsProps.subtitleValues = {buttonText: <strong>{
+            intl.formatMessage({
+                id: 'flag_post.flag',
+                defaultMessage: 'Save Message'},
+            )}</strong>};
+        titleDescriptor = defineMessage({
+            id: 'search_header.title3',
+            defaultMessage: 'Saved messages',
+        });
     } else if (isPinnedPosts) {
         noResultsProps.variant = NoResultsVariant.PinnedPosts;
-        noResultsProps.subtitleValues = {text: <strong>{'Pin to Channel'}</strong>};
+        noResultsProps.subtitleValues = {text: <strong>{
+            intl.formatMessage({
+                id: 'post_info.pin',
+                defaultMessage: 'Pin to Channel',
+            })}</strong>};
 
         sortedResults = [...results];
         sortedResults.sort((postA: Post|FileSearchResultItemType, postB: Post|FileSearchResultItemType) => postB.create_at - postA.create_at);
 
-        titleDescriptor.id = t('search_header.pinnedPosts');
-        titleDescriptor.defaultMessage = 'Pinned Posts';
+        titleDescriptor = defineMessage({
+            id: 'search_header.pinnedMessages',
+            defaultMessage: 'Pinned messages',
+        });
     } else if (isChannelFiles) {
         if (searchFilterType === 'all') {
             noResultsProps.variant = NoResultsVariant.ChannelFiles;
@@ -212,19 +228,34 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
             noResultsProps.variant = NoResultsVariant.ChannelFilesFiltered;
         }
 
-        titleDescriptor.id = t('search_header.channelFiles');
-        titleDescriptor.defaultMessage = 'Files';
+        titleDescriptor = defineMessage({
+            id: 'search_header.channelFiles',
+            defaultMessage: 'Files',
+        });
     } else if (isCard) {
-        titleDescriptor.id = t('search_header.title5');
-        titleDescriptor.defaultMessage = 'Extra information';
+        titleDescriptor = defineMessage({
+            id: 'search_header.title5',
+            defaultMessage: 'Extra information',
+        });
     } else if (!searchTerms && noResults && noFileResults) {
-        titleDescriptor.id = t('search_header.search');
-        titleDescriptor.defaultMessage = 'Search';
+        titleDescriptor = defineMessage({
+            id: 'search_header.search',
+            defaultMessage: 'Search',
+        });
+    } else if (searchType === DataSearchTypes.FILES_SEARCH_TYPE && !isChannelFiles) {
+        noResultsProps.variant = NoResultsVariant.Files;
+        noResultsProps.titleValues = {searchTerm: `${searchTerms}`};
+        titleDescriptor = defineMessage({
+            id: 'search_header.results',
+            defaultMessage: 'Search Results',
+        });
     } else {
-        noResultsProps.titleValues = {channelName: `"${searchTerms}"`};
+        noResultsProps.titleValues = {channelName: `${searchTerms}`};
 
-        titleDescriptor.id = t('search_header.results');
-        titleDescriptor.defaultMessage = 'Search Results';
+        titleDescriptor = defineMessage({
+            id: 'search_header.results',
+            defaultMessage: 'Search Results',
+        });
     }
 
     const formattedTitle = intl.formatMessage(titleDescriptor);
@@ -239,7 +270,7 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
         contentItems = (
             <div className='sidebar--right__subheader a11y__section'>
                 <div className='sidebar--right__loading'>
-                    <LoadingSpinner text={Utils.localizeMessage('search_header.loading', 'Searching')}/>
+                    <LoadingWrapper text={defineMessage({id: 'search_header.loading', defaultMessage: 'Searching'})}/>
                 </div>
             </div>
         );
@@ -262,7 +293,10 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
                     {'sidebar-expanded': isSideBarExpanded},
                 ])}
             >
-                <NoResultsIndicator {...noResultsProps}/>
+                <NoResultsIndicator
+                    style={{padding: '48px'}}
+                    {...noResultsProps}
+                />
             </div>
         );
         break;
@@ -274,7 +308,10 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
                     {'sidebar-expanded': isSideBarExpanded},
                 ])}
             >
-                <NoResultsIndicator {...noResultsProps}/>
+                <NoResultsIndicator
+                    style={{padding: '48px'}}
+                    {...noResultsProps}
+                />
             </div>
         );
         break;
@@ -286,14 +323,15 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
         contentItems = sortedResults.map((item: Post|FileSearchResultItemType, index: number) => {
             if (searchType === DataSearchTypes.MESSAGES_SEARCH_TYPE && !props.isChannelFiles) {
                 return (
-                    <PostComponent
+                    <PostSearchResultsItem
                         key={item.id}
                         post={item as Post}
                         matches={props.matches[item.id]}
-                        term={(!props.isFlaggedPosts && !props.isPinnedPosts && !props.isMentionSearch) ? searchTerms : ''}
+                        searchTerm={searchTerms}
+                        isFlaggedPosts={props.isFlaggedPosts}
                         isMentionSearch={props.isMentionSearch}
+                        isPinnedPosts={props.isPinnedPosts}
                         a11yIndex={index}
-                        location={Locations.SEARCH}
                     />
                 );
             }
@@ -325,7 +363,9 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
             className='SearchResults sidebar-right__body'
         >
             <SearchResultsHeader>
-                {formattedTitle}
+                <h2 id='rhsPanelTitle'>
+                    {formattedTitle}
+                </h2>
                 {props.channelDisplayName && <div className='sidebar--right__title__channel'>{props.channelDisplayName}</div>}
             </SearchResultsHeader>
             {isMessagesSearch &&
@@ -337,6 +377,8 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
                     filesCounter={isSearchFilesAtEnd || props.searchPage === 0 ? `${fileResults.length}` : `${fileResults.length}+`}
                     onChange={setSearchType}
                     onFilter={setSearchFilterType}
+                    onTeamChange={setSearchTeam}
+                    crossTeamSearchEnabled={props.crossTeamSearchEnabled}
                 />}
             {isChannelFiles &&
                 <div className='channel-files__header'>
@@ -384,7 +426,12 @@ const SearchResults: React.FC<Props> = (props: Props): JSX.Element => {
                         regionTitle: formattedTitle,
                     })}
                 >
-                    {contentItems}
+                    <div
+                        id={`${searchType}Panel`}
+                        className='files-or-messages-panel'
+                    >
+                        {contentItems}
+                    </div>
                     {loadingMorePostsComponent}
                 </div>
             </Scrollbars>
@@ -397,11 +444,11 @@ SearchResults.defaultProps = defaultProps;
 export const arePropsEqual = (props: Props, nextProps: Props): boolean => {
     // Shallow compare for all props except 'results' and 'fileResults'
     for (const key in nextProps) {
-        if (!Object.prototype.hasOwnProperty.call(nextProps, key) || key === 'results') {
+        if (!Object.hasOwn(nextProps, key) || key === 'results') {
             continue;
         }
 
-        if (!Object.prototype.hasOwnProperty.call(nextProps, key) || key === 'fileResults') {
+        if (!Object.hasOwn(nextProps, key) || key === 'fileResults') {
             continue;
         }
 

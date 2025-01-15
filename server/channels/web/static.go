@@ -13,13 +13,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mattermost/gziphandler"
+	"github.com/klauspost/compress/gzhttp"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/fileutils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/templates"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/fileutils"
+	"github.com/mattermost/mattermost/server/v8/platform/shared/templates"
 )
 
 var robotsTxt = []byte("User-agent: *\nDisallow: /\n")
@@ -39,15 +39,15 @@ func (w *Web) InitStatic() {
 		pluginHandler := staticFilesHandler(http.StripPrefix(path.Join(subpath, "static", "plugins"), http.FileServer(http.Dir(*w.srv.Config().PluginSettings.ClientDirectory))))
 
 		if *w.srv.Config().ServiceSettings.WebserverMode == "gzip" {
-			staticHandler = gziphandler.GzipHandler(staticHandler)
-			pluginHandler = gziphandler.GzipHandler(pluginHandler)
+			staticHandler = gzhttp.GzipHandler(staticHandler)
+			pluginHandler = gzhttp.GzipHandler(pluginHandler)
 		}
 
 		w.MainRouter.PathPrefix("/static/plugins/").Handler(pluginHandler)
 		w.MainRouter.PathPrefix("/static/").Handler(staticHandler)
 		w.MainRouter.Handle("/robots.txt", http.HandlerFunc(robotsHandler))
 		w.MainRouter.Handle("/unsupported_browser.js", http.HandlerFunc(unsupportedBrowserScriptHandler))
-		w.MainRouter.Handle("/{anything:.*}", w.NewStaticHandler(root)).Methods("GET")
+		w.MainRouter.Handle("/{anything:.*}", w.NewStaticHandler(root)).Methods(http.MethodGet, http.MethodHead)
 
 		// When a subpath is defined, it's necessary to handle redirects without a
 		// trailing slash. We don't want to use StrictSlash on the w.MainRouter and affect
@@ -60,12 +60,16 @@ func (w *Web) InitStatic() {
 }
 
 func root(c *Context, w http.ResponseWriter, r *http.Request) {
-
 	if !CheckClientCompatibility(r.UserAgent()) {
 		w.Header().Set("Cache-Control", "no-store")
 		data := renderUnsupportedBrowser(c.AppContext, r)
 
-		c.App.Srv().TemplatesContainer().Render(w, "unsupported_browser", data)
+		err := c.App.Srv().TemplatesContainer().Render(w, "unsupported_browser", data)
+		if err != nil {
+			c.Logger.Error("Failed to render template", mlog.Err(err))
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		return
 	}
 
@@ -79,7 +83,10 @@ func root(c *Context, w http.ResponseWriter, r *http.Request) {
 	staticDir, _ := fileutils.FindDir(model.ClientDir)
 	contents, err := os.ReadFile(filepath.Join(staticDir, "root.html"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		c.Logger.Warn("Failed to read content from file",
+			mlog.String("file_path", filepath.Join(staticDir, "root.html")),
+			mlog.Err(err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -91,7 +98,11 @@ func root(c *Context, w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html")
-	w.Write(contents)
+	if _, err = w.Write(contents); err != nil {
+		c.Logger.Warn("Failed to write content to HTTP reply", mlog.Err(err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func staticFilesHandler(handler http.Handler) http.Handler {
@@ -136,7 +147,11 @@ func robotsHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Write(robotsTxt)
+	if _, err := w.Write(robotsTxt); err != nil {
+		mlog.Warn("Failed to write robots.txt", mlog.Err(err))
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func unsupportedBrowserScriptHandler(w http.ResponseWriter, r *http.Request) {

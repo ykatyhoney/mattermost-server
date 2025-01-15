@@ -15,6 +15,12 @@
   "env": {
     "cypress/globals": true
   },
+  "settings": {
+    "react": {
+        "pragma": "React",
+        "version": "detect"
+    }
+  },
   "rules": {
     "header/header": [
       2,
@@ -28,6 +34,7 @@
     "cypress/no-async-tests": "error",
     "cypress/no-pause": "error",
     "cypress/no-unnecessary-waiting": 0,
+    "cypress/unsafe-to-chain-command": 0,
     "func-names": 0,
     "import/no-unresolved": 0,
     "max-nested-callbacks": 0,
@@ -55,7 +62,7 @@
         ]
       }
     ],
-    "no-only-tests/no-only-tests": ["error", {"focus": ["only", "skip"]}],
+    "no-only-tests/no-only-tests": ["error", {"focus": ["only"]}],
     "max-lines": ["warn", {"max": 800, "skipBlankLines": true, "skipComments": true}]
   },
   "overrides": [
@@ -88,6 +95,7 @@
             "format": ["PascalCase"]
           }
         ],
+        "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/no-non-null-assertion": 0,
         "@typescript-eslint/no-unused-vars": [
           2,

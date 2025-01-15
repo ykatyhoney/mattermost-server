@@ -3,18 +3,16 @@
 
 import {combineReducers} from 'redux';
 
+import type {ChannelCategory} from '@mattermost/types/channel_categories';
+
 import {ChannelCategoryTypes, UserTypes} from 'mattermost-redux/action_types';
-
-import {GenericAction} from 'mattermost-redux/types/actions';
-import {ChannelCategory} from '@mattermost/types/channel_categories';
-
 import {removeItem} from 'mattermost-redux/utils/array_utils';
-
-import {DraggingState} from 'types/store';
 
 import {ActionTypes} from 'utils/constants';
 
-export function unreadFilterEnabled(state = false, action: GenericAction) {
+import type {DraggingState, MMAction} from 'types/store';
+
+export function unreadFilterEnabled(state = false, action: MMAction) {
     switch (action.type) {
     case ActionTypes.SET_UNREAD_FILTER_ENABLED:
         return action.enabled;
@@ -26,7 +24,7 @@ export function unreadFilterEnabled(state = false, action: GenericAction) {
     }
 }
 
-export function draggingState(state: DraggingState = {}, action: GenericAction): DraggingState {
+export function draggingState(state: DraggingState = {}, action: MMAction): DraggingState {
     switch (action.type) {
     case ActionTypes.SIDEBAR_DRAGGING_SET_STATE:
         return {
@@ -43,7 +41,7 @@ export function draggingState(state: DraggingState = {}, action: GenericAction):
     }
 }
 
-export function newCategoryIds(state: string[] = [], action: GenericAction): string[] {
+export function newCategoryIds(state: string[] = [], action: MMAction): string[] {
     switch (action.type) {
     case ActionTypes.ADD_NEW_CATEGORY_ID:
         return [...state, action.data];
@@ -75,7 +73,7 @@ export function newCategoryIds(state: string[] = [], action: GenericAction): str
     }
 }
 
-export function multiSelectedChannelIds(state: string[] = [], action: GenericAction): string[] {
+export function multiSelectedChannelIds(state: string[] = [], action: MMAction): string[] {
     switch (action.type) {
     case ActionTypes.MULTISELECT_CHANNEL:
         // Channel was not previously selected
@@ -117,24 +115,12 @@ export function multiSelectedChannelIds(state: string[] = [], action: GenericAct
     }
 }
 
-export function lastSelectedChannel(state = '', action: GenericAction): string {
+export function lastSelectedChannel(state = '', action: MMAction): string {
     switch (action.type) {
     case ActionTypes.MULTISELECT_CHANNEL:
     case ActionTypes.MULTISELECT_CHANNEL_ADD:
         return action.data;
     case ActionTypes.MULTISELECT_CHANNEL_CLEAR:
-    case UserTypes.LOGOUT_SUCCESS:
-        return '';
-    default:
-        return state;
-    }
-}
-
-function firstChannelName(state = '', action: GenericAction) {
-    switch (action.type) {
-    case ActionTypes.FIRST_CHANNEL_NAME:
-        return action.data;
-
     case UserTypes.LOGOUT_SUCCESS:
         return '';
     default:
@@ -148,5 +134,4 @@ export default combineReducers({
     newCategoryIds,
     multiSelectedChannelIds,
     lastSelectedChannel,
-    firstChannelName,
 });

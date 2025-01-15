@@ -1,23 +1,24 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ChangeEvent, FormEvent} from 'react';
+import React from 'react';
+import type {ChangeEvent, FormEvent} from 'react';
 import {Modal} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
 
-import {getFullName} from 'mattermost-redux/utils/user_utils';
-import {ActionResult} from 'mattermost-redux/types/actions';
+import type {Channel, ChannelMembership} from '@mattermost/types/channels';
+import type {UserProfile} from '@mattermost/types/users';
+import type {RelationOneToOne} from '@mattermost/types/utilities';
 
-import SearchChannelWithPermissionsProvider from 'components/suggestion/search_channel_with_permissions_provider.jsx';
-import SuggestionBox from 'components/suggestion/suggestion_box';
-import SuggestionBoxComponent from 'components/suggestion/suggestion_box/suggestion_box';
+import type {ActionResult} from 'mattermost-redux/types/actions';
+import {getFullName} from 'mattermost-redux/utils/user_utils';
+
 import ModalSuggestionList from 'components/suggestion/modal_suggestion_list';
+import SearchChannelWithPermissionsProvider from 'components/suggestion/search_channel_with_permissions_provider';
+import SuggestionBox from 'components/suggestion/suggestion_box';
+import type SuggestionBoxComponent from 'components/suggestion/suggestion_box/suggestion_box';
 
 import {placeCaretAtEnd} from 'utils/utils';
-
-import {UserProfile} from '@mattermost/types/users';
-import {Channel, ChannelMembership} from '@mattermost/types/channels';
-import {RelationOneToOne} from '@mattermost/types/utilities';
 
 export type Props = {
 
@@ -54,7 +55,7 @@ export type Props = {
         * SearchChannelWithPermissionsProvider class to fetch channels
         * based on a search term
         */
-        autocompleteChannelsForSearch: (teamId: string, term: string) => Promise<ActionResult>;
+        autocompleteChannelsForSearch: (teamId: string, term: string) => Promise<ActionResult<Channel[]>>;
     };
 
 }
@@ -223,16 +224,16 @@ export default class AddUserToChannelModal extends React.PureComponent<Props, St
         if (!this.state.saving) {
             if (this.state.submitError) {
                 errorMsg = (
-                    <label
+                    <span
                         id='add-user-to-channel-modal__invite-error'
                         className='modal__error has-error control-label'
                     >
                         {this.state.submitError}
-                    </label>
+                    </span>
                 );
             } else if (targetUserIsMemberOfSelectedChannel) {
                 errorMsg = (
-                    <label
+                    <span
                         id='add-user-to-channel-modal__user-is-member'
                         className='modal__error has-error control-label'
                     >
@@ -243,7 +244,7 @@ export default class AddUserToChannelModal extends React.PureComponent<Props, St
                                 name,
                             }}
                         />
-                    </label>
+                    </span>
                 );
             }
         }
@@ -257,6 +258,8 @@ export default class AddUserToChannelModal extends React.PureComponent<Props, St
 
         const content = (
             <SuggestionBox
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
                 ref={this.setSearchBoxRef}
                 className='form-control focused'
                 onChange={this.onInputChange}
@@ -284,7 +287,7 @@ export default class AddUserToChannelModal extends React.PureComponent<Props, St
                 onHide={this.onHide}
                 onExited={this.onExited}
                 enforceFocus={true}
-                role='dialog'
+                role='none'
                 aria-labelledby='addChannelModalLabel'
             >
                 <Modal.Header closeButton={true}>
@@ -314,13 +317,12 @@ export default class AddUserToChannelModal extends React.PureComponent<Props, St
                         </div>
                         <div>
                             {errorMsg}
-                            <br/>
                         </div>
                     </Modal.Body>
                     <Modal.Footer>
                         <button
                             type='button'
-                            className='btn btn-link'
+                            className='btn btn-tertiary'
                             onClick={this.onHide}
                         >
                             <FormattedMessage

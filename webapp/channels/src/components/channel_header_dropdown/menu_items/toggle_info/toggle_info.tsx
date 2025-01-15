@@ -2,9 +2,10 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
+import {useIntl} from 'react-intl';
 
-import {Channel} from '@mattermost/types/channels';
-import {localizeMessage} from 'utils/utils';
+import type {Channel} from '@mattermost/types/channels';
+
 import Menu from 'components/widgets/menu/menu';
 
 type Action = {
@@ -20,6 +21,8 @@ type Props = {
 };
 
 const ToggleInfo = ({show, channel, rhsOpen, actions}: Props) => {
+    const intl = useIntl();
+
     const toggleRHS = () => {
         if (rhsOpen) {
             actions.closeRightHandSide();
@@ -28,7 +31,12 @@ const ToggleInfo = ({show, channel, rhsOpen, actions}: Props) => {
         actions.showChannelInfo(channel.id);
     };
 
-    const text = rhsOpen ? localizeMessage('channelHeader.hideInfo', 'Close Info') : localizeMessage('channelHeader.viewInfo', 'View Info');
+    let text;
+    if (rhsOpen) {
+        text = intl.formatMessage({id: 'channelHeader.hideInfo', defaultMessage: 'Close Info'});
+    } else {
+        text = intl.formatMessage({id: 'channelHeader.viewInfo', defaultMessage: 'View Info'});
+    }
 
     return (
         <Menu.ItemAction

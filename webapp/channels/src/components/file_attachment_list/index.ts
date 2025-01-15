@@ -1,20 +1,25 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {connect, ConnectedProps} from 'react-redux';
-import {bindActionCreators, Dispatch} from 'redux';
+import {connect} from 'react-redux';
+import type {ConnectedProps} from 'react-redux';
+import {bindActionCreators} from 'redux';
+import type {Dispatch} from 'redux';
 
-import {makeGetFilesForPost} from 'mattermost-redux/selectors/entities/files';
+import type {FileInfo} from '@mattermost/types/files';
+import type {Post} from '@mattermost/types/posts';
+
+import {
+    makeGetFilesForEditHistory,
+    makeGetFilesForPost,
+} from 'mattermost-redux/selectors/entities/files';
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
-import {Post} from '@mattermost/types/posts';
-import {GenericAction} from 'mattermost-redux/types/actions';
 
-import {GlobalState} from 'types/store';
-
+import {openModal} from 'actions/views/modals';
 import {getCurrentLocale} from 'selectors/i18n';
 import {isEmbedVisible} from 'selectors/posts';
 
-import {openModal} from 'actions/views/modals';
+import type {GlobalState} from 'types/store';
 
 import FileAttachmentList from './file_attachment_list';
 
@@ -23,14 +28,25 @@ export type OwnProps = {
     compactDisplay?: boolean;
     isInPermalink?: boolean;
     handleFileDropdownOpened?: (open: boolean) => void;
+    isEditHistory?: boolean;
+    disableDownload?: boolean;
+    disableActions?: boolean;
 }
 
 function makeMapStateToProps() {
     const selectFilesForPost = makeGetFilesForPost();
+    const getFilesForEditHistory = makeGetFilesForEditHistory();
 
     return function mapStateToProps(state: GlobalState, ownProps: OwnProps) {
         const postId = ownProps.post ? ownProps.post.id : '';
-        const fileInfos = selectFilesForPost(state, postId);
+
+        var fileInfos: FileInfo[];
+
+        if (ownProps.isEditHistory) {
+            fileInfos = getFilesForEditHistory(state, ownProps.post);
+        } else {
+            fileInfos = selectFilesForPost(state, postId);
+        }
 
         let fileCount = 0;
         if (ownProps.post.metadata && ownProps.post.metadata.files) {
@@ -51,7 +67,7 @@ function makeMapStateToProps() {
     };
 }
 
-function mapDispatchToProps(dispatch: Dispatch<GenericAction>) {
+function mapDispatchToProps(dispatch: Dispatch) {
     return {
         actions: bindActionCreators({
             openModal,

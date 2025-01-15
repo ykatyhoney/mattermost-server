@@ -8,8 +8,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 func (a *App) GetGroup(id string, opts *model.GetGroupOpts, viewRestrictions *model.ViewUsersRestrictions) (*model.Group, *model.AppError) {
@@ -24,12 +24,23 @@ func (a *App) GetGroup(id string, opts *model.GetGroupOpts, viewRestrictions *mo
 		}
 	}
 
+	if opts != nil && opts.IncludeMemberIDs {
+		users, err := a.Srv().Store().Group().GetMemberUsers(id)
+		if err != nil {
+			return nil, model.NewAppError("GetGroup", "app.member_count", nil, "", http.StatusInternalServerError).Wrap(err)
+		}
+
+		for _, user := range users {
+			group.MemberIDs = append(group.MemberIDs, user.Id)
+		}
+	}
+
 	if opts != nil && opts.IncludeMemberCount {
 		memberCount, err := a.Srv().Store().Group().GetMemberCountWithRestrictions(id, viewRestrictions)
 		if err != nil {
 			return nil, model.NewAppError("GetGroup", "app.member_count", nil, "", http.StatusInternalServerError).Wrap(err)
 		}
-		group.MemberCount = model.NewInt(int(memberCount))
+		group.MemberCount = model.NewPointer(int(memberCount))
 	}
 
 	return group, nil
@@ -116,7 +127,7 @@ func (a *App) isUniqueToUsernames(val string) *model.AppError {
 		return model.NewAppError("isUniqueToUsernames", model.NoTranslation, nil, "", http.StatusInternalServerError).Wrap(err)
 	}
 	if user != nil {
-		return model.NewAppError("isUniqueToUsernames", "app.group.username_conflict", map[string]interface{}{"Username": val}, "", http.StatusBadRequest)
+		return model.NewAppError("isUniqueToUsernames", "app.group.username_conflict", map[string]any{"Username": val}, "", http.StatusBadRequest)
 	}
 	return nil
 }
@@ -149,7 +160,7 @@ func (a *App) CreateGroupWithUserIds(group *model.GroupWithUserIds) (*model.Grou
 	if err != nil {
 		return nil, model.NewAppError("CreateGroupWithUserIds", "app.group.id.app_error", nil, "", http.StatusBadRequest).Wrap(err)
 	}
-	group.MemberCount = model.NewInt(int(count))
+	group.MemberCount = model.NewPointer(int(count))
 	groupJSON, jsonErr := json.Marshal(newGroup)
 	if jsonErr != nil {
 		return nil, model.NewAppError("CreateGroupWithUserIds", "api.marshal_error", nil, "", http.StatusInternalServerError).Wrap(jsonErr)
@@ -188,7 +199,7 @@ func (a *App) UpdateGroup(group *model.Group) (*model.Group, *model.AppError) {
 		return nil, model.NewAppError("UpdateGroup", "app.group.id.app_error", nil, "", http.StatusBadRequest).Wrap(err)
 	}
 
-	updatedGroup.MemberCount = model.NewInt(int(count))
+	updatedGroup.MemberCount = model.NewPointer(int(count))
 	messageWs := model.NewWebSocketEvent(model.WebsocketEventReceivedGroup, "", "", "", nil, "")
 
 	groupJSON, err := json.Marshal(updatedGroup)
@@ -213,6 +224,22 @@ func (a *App) DeleteGroup(groupID string) (*model.Group, *model.AppError) {
 		}
 	}
 
+	count, err := a.Srv().Store().Group().GetMemberCount(groupID)
+	if err != nil {
+		return nil, model.NewAppError("DeleteGroup", "app.group.id.app_error", nil, "", http.StatusBadRequest).Wrap(err)
+	}
+
+	deletedGroup.MemberCount = model.NewPointer(int(count))
+
+	messageWs := model.NewWebSocketEvent(model.WebsocketEventReceivedGroup, "", "", "", nil, "")
+
+	groupJSON, err := json.Marshal(deletedGroup)
+	if err != nil {
+		return nil, model.NewAppError("DeleteGroup", "api.marshal_error", nil, "", http.StatusInternalServerError).Wrap(err)
+	}
+	messageWs.Add("group", string(groupJSON))
+	a.Publish(messageWs)
+
 	return deletedGroup, nil
 }
 
@@ -222,11 +249,27 @@ func (a *App) RestoreGroup(groupID string) (*model.Group, *model.AppError) {
 		var nfErr *store.ErrNotFound
 		switch {
 		case errors.As(err, &nfErr):
-			return nil, model.NewAppError("RestoreGroup", "app.group.no_rows", nil, nfErr.Error(), http.StatusNotFound)
+			return nil, model.NewAppError("RestoreGroup", "app.group.no_rows", nil, "", http.StatusNotFound).Wrap(nfErr)
 		default:
-			return nil, model.NewAppError("RestoreGroup", "app.update_error", nil, err.Error(), http.StatusInternalServerError)
+			return nil, model.NewAppError("RestoreGroup", "app.update_error", nil, "", http.StatusInternalServerError).Wrap(err)
 		}
 	}
+
+	count, err := a.Srv().Store().Group().GetMemberCount(groupID)
+	if err != nil {
+		return nil, model.NewAppError("RestoreGroup", "app.group.id.app_error", nil, "", http.StatusBadRequest).Wrap(err)
+	}
+
+	restoredGroup.MemberCount = model.NewPointer(int(count))
+
+	messageWs := model.NewWebSocketEvent(model.WebsocketEventReceivedGroup, "", "", "", nil, "")
+
+	groupJSON, err := json.Marshal(restoredGroup)
+	if err != nil {
+		return nil, model.NewAppError("RestoreGroup", "api.marshal_error", nil, "", http.StatusInternalServerError).Wrap(err)
+	}
+	messageWs.Add("group", string(groupJSON))
+	a.Publish(messageWs)
 
 	return restoredGroup, nil
 }
@@ -327,12 +370,13 @@ func (a *App) UpsertGroupSyncable(groupSyncable *model.GroupSyncable) (*model.Gr
 	if groupSyncable.Type == model.GroupSyncableTypeChannel {
 		channel, nErr := a.Srv().Store().Channel().Get(groupSyncable.SyncableId, true)
 		if nErr != nil {
+			errCtx := map[string]any{"channel_id": groupSyncable.SyncableId}
 			var nfErr *store.ErrNotFound
 			switch {
 			case errors.As(nErr, &nfErr):
-				return nil, model.NewAppError("UpsertGroupSyncable", "app.channel.get.existing.app_error", nil, "", http.StatusNotFound).Wrap(nErr)
+				return nil, model.NewAppError("UpsertGroupSyncable", "app.channel.get.existing.app_error", errCtx, "", http.StatusNotFound).Wrap(nErr)
 			default:
-				return nil, model.NewAppError("UpsertGroupSyncable", "app.channel.get.find.app_error", nil, "", http.StatusInternalServerError).Wrap(nErr)
+				return nil, model.NewAppError("UpsertGroupSyncable", "app.channel.get.find.app_error", errCtx, "", http.StatusInternalServerError).Wrap(nErr)
 			}
 		}
 
@@ -604,6 +648,19 @@ func (a *App) GetGroups(page, perPage int, opts model.GroupSearchOpts, viewRestr
 		return nil, model.NewAppError("GetGroups", "app.select_error", nil, "", http.StatusInternalServerError).Wrap(err)
 	}
 
+	if opts.IncludeMemberIDs {
+		for _, group := range groups {
+			users, err := a.Srv().Store().Group().GetMemberUsers(group.Id)
+			if err != nil {
+				return nil, model.NewAppError("GetGroup", "app.member_count", nil, "", http.StatusInternalServerError).Wrap(err)
+			}
+
+			for _, user := range users {
+				group.MemberIDs = append(group.MemberIDs, user.Id)
+			}
+		}
+	}
+
 	return groups, nil
 }
 
@@ -797,7 +854,7 @@ func (a *App) DeleteGroupMembers(groupID string, userIDs []string) ([]*model.Gro
 	return members, nil
 }
 
-func (a *App) publishGroupMemberEvent(eventName string, groupMember *model.GroupMember) *model.AppError {
+func (a *App) publishGroupMemberEvent(eventName model.WebsocketEventType, groupMember *model.GroupMember) *model.AppError {
 	messageWs := model.NewWebSocketEvent(eventName, "", "", groupMember.UserId, nil, "")
 	groupMemberJSON, jsonErr := json.Marshal(groupMember)
 	if jsonErr != nil {

@@ -1,9 +1,9 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {GlobalState} from '@mattermost/types/store';
-import {General} from 'mattermost-redux/constants';
+import type {GlobalState} from '@mattermost/types/store';
 
+import {General} from 'mattermost-redux/constants';
 import * as Selectors from 'mattermost-redux/selectors/entities/general';
 
 describe('Selectors.General', () => {
@@ -398,6 +398,35 @@ describe('Selectors.General', () => {
             expect(Selectors.getFirstAdminVisitMarketplaceStatus(state)).toEqual(true);
             state.entities.general.firstAdminVisitMarketplaceStatus = false;
             expect(Selectors.getFirstAdminVisitMarketplaceStatus(state)).toEqual(false);
+        });
+    });
+
+    describe('getCustomProfileAttributes', () => {
+        test('should return empty when no attributes', () => {
+            const state = {
+                entities: {
+                    general: {
+                        customProfileAttributes: {
+                        },
+                    },
+                },
+            } as unknown as GlobalState;
+
+            expect(Selectors.getCustomProfileAttributes(state)).toEqual({});
+        });
+
+        test('should return the value of the attributes', () => {
+            const state = {
+                entities: {
+                    general: {
+                        customProfileAttributes: [{id: '123', name: 'test attribute', dataType: 'text'}],
+                    },
+                },
+            } as unknown as GlobalState;
+
+            expect(Selectors.getCustomProfileAttributes(state)[0].id).toEqual('123');
+            state.entities.general.customProfileAttributes = {};
+            expect(Selectors.getCustomProfileAttributes(state)).toEqual({});
         });
     });
 });

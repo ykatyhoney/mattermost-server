@@ -10,11 +10,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin/plugintest/mock"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
 )
 
 func TestProcessPermalinkToRemote(t *testing.T) {
@@ -26,6 +26,7 @@ func TestProcessPermalinkToRemote(t *testing.T) {
 	mockStore := &mocks.Store{}
 	mockPostStore := mocks.PostStore{}
 	utils.TranslationsPreInit()
+	logger := mlog.CreateConsoleTestLogger(t)
 
 	pl := &model.PostList{}
 	mockPostStore.On("Get", context.Background(), "postID", model.GetPostsOptions{SkipFetchThreads: true}, "", map[string]bool{}).Return(pl, nil)
@@ -34,7 +35,7 @@ func TestProcessPermalinkToRemote(t *testing.T) {
 
 	mockServer := scs.server.(*MockServerIface)
 	mockServer.On("GetStore").Return(mockStore)
-	mockServer.On("Log").Return(mlog.NewLogger())
+	mockServer.On("Log").Return(logger)
 
 	mockApp := scs.app.(*MockAppIface)
 	mockApp.On("SendEphemeralPost", mock.Anything, "user", mock.AnythingOfType("*model.Post")).Return(&model.Post{}).Times(1)

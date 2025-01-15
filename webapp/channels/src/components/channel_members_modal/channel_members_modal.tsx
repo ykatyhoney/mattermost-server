@@ -5,14 +5,14 @@ import React from 'react';
 import {Modal} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
 
-import {Channel} from '@mattermost/types/channels';
+import type {Channel} from '@mattermost/types/channels';
 
-import MemberListChannel from 'components/member_list_channel';
 import ChannelInviteModal from 'components/channel_invite_modal';
-
-import {ModalData} from 'types/actions';
+import MemberListChannel from 'components/member_list_channel';
 
 import {ModalIdentifiers} from 'utils/constants';
+
+import type {ModalData} from 'types/actions';
 
 type Props = {
 
@@ -74,7 +74,7 @@ export default class ChannelMembersModal extends React.PureComponent<Props, Stat
                     show={this.state.show}
                     onHide={this.handleHide}
                     onExited={this.props.onExited}
-                    role='dialog'
+                    role='none'
                     aria-labelledby='channelMembersModalLabel'
                     id='channelMembersModal'
                 >

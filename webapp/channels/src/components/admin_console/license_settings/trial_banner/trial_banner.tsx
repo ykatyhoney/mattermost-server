@@ -2,27 +2,24 @@
 // See LICENSE.txt for license information.
 
 import React, {useEffect, useState} from 'react';
+import type {ReactNode} from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
 
 import {savePreferences} from 'mattermost-redux/actions/preferences';
+import {getBool as getBoolPreference} from 'mattermost-redux/selectors/entities/preferences';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {PreferenceType} from '@mattermost/types/preferences';
-import {makeGetCategory} from 'mattermost-redux/selectors/entities/preferences';
 
 import AlertBanner from 'components/alert_banner';
-import LoadingWrapper from 'components/widgets/loading/loading_wrapper';
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
 import withOpenStartTrialFormModal from 'components/common/hocs/cloud/with_open_start_trial_form_modal';
-import {TelemetryProps} from 'components/common/hooks/useOpenPricingModal';
-
-import {format} from 'utils/markdown';
+import type {TelemetryProps} from 'components/common/hooks/useOpenPricingModal';
+import ExternalLink from 'components/external_link';
+import LoadingWrapper from 'components/widgets/loading/loading_wrapper';
 
 import {AboutLinks, LicenseLinks, Preferences, Unique} from 'utils/constants';
+import {format} from 'utils/markdown';
 
-import {GlobalState} from 'types/store';
-import store from 'stores/redux_store.jsx';
-import ExternalLink from 'components/external_link';
+import type {GlobalState} from 'types/store';
 
 interface TrialBannerProps {
     isDisabled: boolean;
@@ -91,14 +88,9 @@ const TrialBanner = ({
     let gettingTrialErrorMsg;
 
     const {formatMessage} = useIntl();
-    const state = store.getState();
-    const getCategory = makeGetCategory();
-    const preferences = getCategory(state, Preferences.UNIQUE);
-    const restartedAfterUpgradePrefValue = preferences.find((pref: PreferenceType) => pref.name === Unique.REQUEST_TRIAL_AFTER_SERVER_UPGRADE);
-    const clickedUpgradeAndStartTrialBtn = preferences.find((pref: PreferenceType) => pref.name === Unique.CLICKED_UPGRADE_AND_TRIAL_BTN);
 
-    const restartedAfterUpgradePrefs = restartedAfterUpgradePrefValue?.value === 'true';
-    const clickedUpgradeAndTrialBtn = clickedUpgradeAndStartTrialBtn?.value === 'true';
+    const restartedAfterUpgradePrefs = useSelector<GlobalState>((state) => getBoolPreference(state, Preferences.UNIQUE, Unique.REQUEST_TRIAL_AFTER_SERVER_UPGRADE));
+    const clickedUpgradeAndTrialBtn = useSelector<GlobalState>((state) => getBoolPreference(state, Preferences.UNIQUE, Unique.CLICKED_UPGRADE_AND_TRIAL_BTN));
 
     const userId = useSelector((state: GlobalState) => getCurrentUserId(state));
 
@@ -106,7 +98,7 @@ const TrialBanner = ({
 
     const dispatch = useDispatch();
 
-    const btnText = (status: TrialLoadStatus): string => {
+    const btnText = (status: TrialLoadStatus) => {
         switch (status) {
         case TrialLoadStatus.Started:
             return formatMessage({id: 'start_trial.modal.gettingTrial', defaultMessage: 'Getting Trial...'});
@@ -115,7 +107,22 @@ const TrialBanner = ({
         case TrialLoadStatus.Failed:
             return formatMessage({id: 'start_trial.modal.failed', defaultMessage: 'Failed'});
         case TrialLoadStatus.Embargoed:
-            return formatMessage({id: 'admin.license.trial-request.embargoed'});
+            return formatMessage<ReactNode>(
+                {
+                    id: 'admin.license.trial-request.embargoed',
+                    defaultMessage: 'We were unable to process the request due to limitations for embargoed countries. <link>Learn more in our documentation</link>, or reach out to legal@mattermost.com for questions around export limitations.',
+                },
+                {
+                    link: (text: string) => (
+                        <ExternalLink
+                            location='trial_banner'
+                            href={LicenseLinks.EMBARGOED_COUNTRIES}
+                        >
+                            {text}
+                        </ExternalLink>
+                    ),
+                },
+            );
         default:
             return formatMessage({id: 'admin.license.trial-request.startTrial', defaultMessage: 'Start trial'});
         }
@@ -184,7 +191,7 @@ const TrialBanner = ({
             role='button'
             onClick={openEEModal}
         >
-            <FormattedMarkdownMessage
+            <FormattedMessage
                 id='admin.license.enterprise.upgrade.eeLicenseLink'
                 defaultMessage='Enterprise Edition License'
             />
@@ -333,22 +340,21 @@ const TrialBanner = ({
                 {upgradeError && (
                     <div className='upgrade-error'>
                         <div className='form-group has-error'>
-                            <label className='control-label'>
-                                <span
-                                    dangerouslySetInnerHTML={{
-                                        __html: format(upgradeError),
-                                    }}
-                                />
-                            </label>
+                            <div
+                                className='as-bs-label control-label'
+                                dangerouslySetInnerHTML={{
+                                    __html: format(upgradeError),
+                                }}
+                            />
                         </div>
                     </div>
                 )}
                 {restartError && (
-                    <div className='col-sm-12'>
+                    <div className='upgrade-error'>
                         <div className='form-group has-error'>
-                            <label className='control-label'>
+                            <div className='as-bs-label control-label'>
                                 {restartError}
-                            </label>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -3,20 +3,20 @@
 
 import React from 'react';
 import {Modal} from 'react-bootstrap';
-import {FormattedMessage} from 'react-intl';
+import type {IntlShape} from 'react-intl';
+import {injectIntl, FormattedMessage, defineMessage} from 'react-intl';
 
-import {ActionResult} from 'mattermost-redux/types/actions';
+import type {Team} from '@mattermost/types/teams';
 
-import {Team} from '@mattermost/types/teams';
+import type {ActionResult} from 'mattermost-redux/types/actions';
 
-import Constants, {ModalIdentifiers} from 'utils/constants';
-
-import MultiSelect, {Value} from 'components/multiselect/multiselect';
 import ConfirmModal from 'components/confirm_modal';
+import MultiSelect from 'components/multiselect/multiselect';
+import type {Value} from 'components/multiselect/multiselect';
 import TeamIcon from 'components/widgets/team_icon/team_icon';
 
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
-import {localizeMessage, imageURLForTeam} from 'utils/utils';
+import Constants, {ModalIdentifiers} from 'utils/constants';
+import {imageURLForTeam} from 'utils/utils';
 
 const TEAMS_PER_PAGE = 50;
 
@@ -25,6 +25,7 @@ type TeamValue = (Team & Value);
 export type Props = {
     currentSchemeId?: string;
     alreadySelected?: string[];
+    intl: IntlShape;
     excludeGroupConstrained?: boolean;
     searchTerm: string;
     teams: Team[];
@@ -49,7 +50,7 @@ type State = {
     confirmAddTeam: any;
 };
 
-export default class TeamSelectorModal extends React.PureComponent<Props, State> {
+export class TeamSelectorModal extends React.PureComponent<Props, State> {
     private searchTimeoutId?: number;
     private selectedItemRef?: React.RefObject<HTMLDivElement> | undefined;
     private currentSchemeId?: string;
@@ -241,7 +242,7 @@ export default class TeamSelectorModal extends React.PureComponent<Props, State>
             />
         );
 
-        const buttonSubmitText = localizeMessage('multiselect.add', 'Add');
+        const buttonSubmitText = defineMessage({id: 'multiselect.add', defaultMessage: 'Add'});
 
         let teams = [] as Team[];
         if (this.props.teams) {
@@ -277,7 +278,7 @@ export default class TeamSelectorModal extends React.PureComponent<Props, State>
                 show={this.state.show}
                 onHide={this.handleHide}
                 onExited={this.handleExit}
-                role='dialog'
+                role='none'
                 aria-labelledby='teamSelectorModalLabel'
             >
                 <Modal.Header closeButton={true}>
@@ -285,9 +286,9 @@ export default class TeamSelectorModal extends React.PureComponent<Props, State>
                         componentClass='h1'
                         id='teamSelectorModalLabel'
                     >
-                        <FormattedMarkdownMessage
-                            id='add_teams_to_scheme.title'
-                            defaultMessage='Add Teams to **Team Selection** List'
+                        <FormattedMessage
+                            id='add_teams_to_scheme.modalTitle'
+                            defaultMessage='Add Teams to Team Selection List'
                         />
                     </Modal.Title>
                 </Modal.Header>
@@ -297,6 +298,7 @@ export default class TeamSelectorModal extends React.PureComponent<Props, State>
                         key='addTeamsToSchemeKey'
                         options={teamsValues}
                         optionRenderer={this.renderOption}
+                        intl={this.props.intl}
                         selectedItemRef={this.selectedItemRef}
                         values={this.state.values}
                         valueRenderer={this.renderValue}
@@ -310,10 +312,12 @@ export default class TeamSelectorModal extends React.PureComponent<Props, State>
                         buttonSubmitText={buttonSubmitText}
                         saving={false}
                         loading={this.state.loadingTeams}
-                        placeholderText={localizeMessage('multiselect.addTeamsPlaceholder', 'Search and add teams')}
+                        placeholderText={defineMessage({id: 'multiselect.addTeamsPlaceholder', defaultMessage: 'Search and add teams'})}
                     />
                 </Modal.Body>
             </Modal>
         );
     }
 }
+
+export default injectIntl(TeamSelectorModal);

@@ -4,18 +4,19 @@
 import React from 'react';
 import {FormattedMessage} from 'react-intl';
 
+import type {Post} from '@mattermost/types/posts';
+
 import {Posts} from 'mattermost-redux/constants';
-import {Post} from '@mattermost/types/posts';
-
-import {Theme} from 'mattermost-redux/selectors/entities/preferences';
-
-import * as Utils from 'utils/utils';
+import type {Theme} from 'mattermost-redux/selectors/entities/preferences';
+import {isPostEphemeral} from 'mattermost-redux/utils/post_utils';
 
 import PostMarkdown from 'components/post_markdown';
-import Pluggable from 'plugins/pluggable';
 import ShowMore from 'components/post_view/show_more';
-import {TextFormattingOptions} from 'utils/text_formatting';
-import {AttachmentTextOverflowType} from 'components/post_view/show_more/show_more';
+import type {AttachmentTextOverflowType} from 'components/post_view/show_more/show_more';
+
+import Pluggable from 'plugins/pluggable';
+import type {TextFormattingOptions} from 'utils/text_formatting';
+import * as Utils from 'utils/utils';
 
 type Props = {
     post: Post; /* The post to render the message for */
@@ -114,9 +115,9 @@ export default class PostMessageView extends React.PureComponent<Props, State> {
             return <span>{post.message}</span>;
         }
 
-        const postType = post.props && post.props.type ? post.props.type : post.type;
+        const postType = typeof post.props?.type === 'string' ? post.props.type : post.type;
 
-        if (pluginPostTypes && pluginPostTypes.hasOwnProperty(postType)) {
+        if (pluginPostTypes && Object.hasOwn(pluginPostTypes, postType)) {
             const PluginComponent = pluginPostTypes[postType].component;
             return (
                 <PluginComponent
@@ -129,9 +130,9 @@ export default class PostMessageView extends React.PureComponent<Props, State> {
         }
 
         let message = post.message;
-        const isEphemeral = Utils.isPostEphemeral(post);
+        const isEphemeral = isPostEphemeral(post);
         if (compactDisplay && isEphemeral) {
-            const visibleMessage = Utils.localizeMessage('post_info.message.visible.compact', ' (Only visible to you)');
+            const visibleMessage = Utils.localizeMessage({id: 'post_info.message.visible.compact', defaultMessage: ' (Only visible to you)'});
             message = message.concat(visibleMessage);
         }
 
@@ -145,7 +146,6 @@ export default class PostMessageView extends React.PureComponent<Props, State> {
                 maxHeight={maxHeight}
             >
                 <div
-                    aria-readonly='true'
                     tabIndex={0}
                     id={id}
                     className='post-message__text'
@@ -155,11 +155,9 @@ export default class PostMessageView extends React.PureComponent<Props, State> {
                     <PostMarkdown
                         message={message}
                         imageProps={this.imageProps}
-                        isRHS={isRHS}
                         options={options}
                         post={post}
                         channelId={post.channel_id}
-                        mentionKeys={[]}
                         showPostEditedIndicator={this.props.showPostEditedIndicator}
                     />
                 </div>

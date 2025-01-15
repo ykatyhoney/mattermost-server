@@ -3,50 +3,52 @@
 
 import {batchActions} from 'redux-batched-actions';
 
+import type {Channel, ChannelMembership} from '@mattermost/types/channels';
+import type {Post} from '@mattermost/types/posts';
+import type {Team} from '@mattermost/types/teams';
+import type {UserProfile} from '@mattermost/types/users';
+
+import {ChannelTypes} from 'mattermost-redux/action_types';
+import {fetchAppBindings} from 'mattermost-redux/actions/apps';
 import {
-    fetchMyChannelsAndMembersREST,
+    fetchChannelsAndMembers,
     getChannelByNameAndTeamName,
     getChannelStats,
     selectChannel,
 } from 'mattermost-redux/actions/channels';
-import {logout, loadMe, loadMeREST} from 'mattermost-redux/actions/users';
+import {fetchTeamScheduledPosts} from 'mattermost-redux/actions/scheduled_posts';
+import {logout, loadMe} from 'mattermost-redux/actions/users';
 import {Preferences} from 'mattermost-redux/constants';
-import {getConfig, isPerformanceDebuggingEnabled} from 'mattermost-redux/selectors/entities/general';
-import {getCurrentTeamId, getMyTeams, getTeam, getMyTeamMember, getTeamMemberships} from 'mattermost-redux/selectors/entities/teams';
-import {getBool, isCollapsedThreadsEnabled, isGraphQLEnabled} from 'mattermost-redux/selectors/entities/preferences';
-import {getCurrentUser, getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {getCurrentChannelStats, getCurrentChannelId, getMyChannelMember, getRedirectChannelNameForTeam, getChannelsNameMapInTeam, getAllDirectChannels, getChannelMessageCount} from 'mattermost-redux/selectors/entities/channels';
 import {appsEnabled} from 'mattermost-redux/selectors/entities/apps';
-import {ChannelTypes} from 'mattermost-redux/action_types';
-import {fetchAppBindings} from 'mattermost-redux/actions/apps';
-import {Channel, ChannelMembership} from '@mattermost/types/channels';
-import {UserProfile} from '@mattermost/types/users';
-import {Post} from '@mattermost/types/posts';
-import {ActionFunc, DispatchFunc, GetStateFunc} from 'mattermost-redux/types/actions';
-import {Team} from '@mattermost/types/teams';
+import {getCurrentChannelStats, getCurrentChannelId, getMyChannelMember, getRedirectChannelNameForTeam, getChannelsNameMapInTeam, getAllDirectChannels, getChannelMessageCount} from 'mattermost-redux/selectors/entities/channels';
+import {getConfig, isPerformanceDebuggingEnabled} from 'mattermost-redux/selectors/entities/general';
+import {getBool, getIsOnboardingFlowEnabled, isCollapsedThreadsEnabled} from 'mattermost-redux/selectors/entities/preferences';
+import {getCurrentTeamId, getMyTeams, getTeam, getMyTeamMember, getTeamMemberships, getActiveTeamsList} from 'mattermost-redux/selectors/entities/teams';
+import {getCurrentUser, getCurrentUserId, isFirstAdmin} from 'mattermost-redux/selectors/entities/users';
 import {calculateUnreadCount} from 'mattermost-redux/utils/channel_utils';
 
-import {getHistory} from 'utils/browser_history';
 import {handleNewPost} from 'actions/post_actions';
-import {stopPeriodicStatusUpdates} from 'actions/status_actions';
 import {loadProfilesForSidebar} from 'actions/user_actions';
-import {closeRightHandSide, closeMenu as closeRhsMenu, updateRhsState} from 'actions/views/rhs';
 import {clearUserCookie} from 'actions/views/cookie';
 import {close as closeLhs} from 'actions/views/lhs';
+import {closeRightHandSide, closeMenu as closeRhsMenu, updateRhsState} from 'actions/views/rhs';
 import * as WebsocketActions from 'actions/websocket_actions.jsx';
 import {getCurrentLocale} from 'selectors/i18n';
 import {getIsRhsOpen, getPreviousRhsState, getRhsState} from 'selectors/rhs';
 import BrowserStore from 'stores/browser_store';
-import store from 'stores/redux_store.jsx';
 import LocalStorageStore from 'stores/local_storage_store';
-import WebSocketClient from 'client/web_websocket_client.jsx';
+import store from 'stores/redux_store';
 
-import {GlobalState} from 'types/store';
+import SubMenuModal from 'components/widgets/menu/menu_modals/submenu_modal/submenu_modal';
 
+import WebSocketClient from 'client/web_websocket_client';
+import {getHistory} from 'utils/browser_history';
 import {ActionTypes, PostTypes, RHSStates, ModalIdentifiers, PreviousViewedTypes} from 'utils/constants';
+import DesktopApp from 'utils/desktop_api';
 import {filterAndSortTeamsByDisplayName} from 'utils/team_utils';
 import * as Utils from 'utils/utils';
-import SubMenuModal from '../components/widgets/menu/menu_modals/submenu_modal/submenu_modal';
+
+import type {ActionFuncAsync, ThunkActionFunc, GlobalState} from 'types/store';
 
 import {openModal} from './views/modals';
 
@@ -65,7 +67,7 @@ export function emitChannelClickEvent(channel: Channel) {
         const currentChannelId = getCurrentChannelId(state);
         const previousRhsState = getPreviousRhsState(state);
 
-        dispatch(getChannelStats(chan.id, true));
+        dispatch(getChannelStats(chan.id));
 
         const penultimate = LocalStorageStore.getPreviousChannelName(userId, teamId);
         const penultimateType = LocalStorageStore.getPreviousViewedType(userId, teamId);
@@ -167,8 +169,8 @@ export function showMobileSubMenuModal(elements: any[]) { // TODO Use more speci
     dispatch(openModal(submenuModalData));
 }
 
-export function sendEphemeralPost(message: string, channelId?: string, parentId?: string, userId?: string): ActionFunc {
-    return (doDispatch: DispatchFunc, doGetState: GetStateFunc) => {
+export function sendEphemeralPost(message: string, channelId?: string, parentId?: string, userId?: string): ActionFuncAsync<boolean> {
+    return (doDispatch, doGetState) => {
         const timestamp = Utils.getTimestamp();
         const post = {
             id: Utils.generateId(),
@@ -176,25 +178,6 @@ export function sendEphemeralPost(message: string, channelId?: string, parentId?
             channel_id: channelId || getCurrentChannelId(doGetState()),
             message,
             type: PostTypes.EPHEMERAL,
-            create_at: timestamp,
-            update_at: timestamp,
-            root_id: parentId || '',
-            props: {},
-        } as Post;
-
-        return doDispatch(handleNewPost(post));
-    };
-}
-
-export function sendGenericPostMessage(message: string, channelId?: string, parentId?: string, userId?: string): ActionFunc {
-    return (doDispatch: DispatchFunc, doGetState: GetStateFunc) => {
-        const timestamp = Utils.getTimestamp();
-        const post = {
-            id: Utils.generateId(),
-            user_id: userId || '0',
-            channel_id: channelId || getCurrentChannelId(doGetState()),
-            message,
-            type: PostTypes.SYSTEM_GENERIC,
             create_at: timestamp,
             update_at: timestamp,
             root_id: parentId || '',
@@ -227,7 +210,7 @@ export function sendAddToChannelEphemeralPost(user: UserProfile, addedUsername: 
 
 let lastTimeTypingSent = 0;
 export function emitLocalUserTypingEvent(channelId: string, parentPostId: string) {
-    const userTyping = async (actionDispatch: DispatchFunc, actionGetState: GetStateFunc) => {
+    const userTyping: ActionFuncAsync = async (actionDispatch, actionGetState) => {
         const state = actionGetState();
         const config = getConfig(state);
 
@@ -267,9 +250,11 @@ export function emitUserLoggedOutEvent(redirectTo = '/', shouldSignalLogout = tr
     dispatch(logout()).then(() => {
         if (shouldSignalLogout) {
             BrowserStore.signalLogout();
+            DesktopApp.signalLogout();
         }
 
-        stopPeriodicStatusUpdates();
+        BrowserStore.clearHideNotificationPermissionRequestBanner();
+
         WebsocketActions.close();
 
         clearUserCookie();
@@ -280,8 +265,8 @@ export function emitUserLoggedOutEvent(redirectTo = '/', shouldSignalLogout = tr
     });
 }
 
-export function toggleSideBarRightMenuAction() {
-    return (doDispatch: DispatchFunc) => {
+export function toggleSideBarRightMenuAction(): ThunkActionFunc<void> {
+    return (doDispatch) => {
         doDispatch(closeRightHandSide());
         doDispatch(closeLhs());
         doDispatch(closeRhsMenu());
@@ -307,7 +292,7 @@ export async function getTeamRedirectChannelIfIsAccesible(user: UserProfile, tea
     let teamChannels = getChannelsNameMapInTeam(state, team.id);
     if (!teamChannels || Object.keys(teamChannels).length === 0) {
         // This should be executed in pretty limited scenarios (empty teams)
-        await dispatch(fetchMyChannelsAndMembersREST(team.id)); // eslint-disable-line no-await-in-loop
+        await dispatch(fetchChannelsAndMembers(team.id)); // eslint-disable-line no-await-in-loop
         state = getState();
         teamChannels = getChannelsNameMapInTeam(state, team.id);
     }
@@ -320,7 +305,7 @@ export async function getTeamRedirectChannelIfIsAccesible(user: UserProfile, tea
         channel = dmList.find((directChannel) => directChannel.name === channelName);
     }
 
-    let channelMember: ChannelMembership | null | undefined;
+    let channelMember: ChannelMembership | undefined;
     if (channel) {
         channelMember = getMyChannelMember(state, channel.id);
     }
@@ -346,19 +331,26 @@ export async function getTeamRedirectChannelIfIsAccesible(user: UserProfile, tea
     return null;
 }
 
-export async function redirectUserToDefaultTeam() {
+function historyPushWithQueryParams(path: string, queryParams?: URLSearchParams) {
+    if (queryParams) {
+        getHistory().push({
+            pathname: path,
+            search: queryParams.toString(),
+        });
+    } else {
+        getHistory().push(path);
+    }
+}
+
+export async function redirectUserToDefaultTeam(searchParams?: URLSearchParams) {
     let state = getState();
 
     // Assume we need to load the user if they don't have any team memberships loaded or the user loaded
     let user = getCurrentUser(state);
     const shouldLoadUser = Utils.isEmptyObject(getTeamMemberships(state)) || !user;
-
+    const onboardingFlowEnabled = getIsOnboardingFlowEnabled(state);
     if (shouldLoadUser) {
-        if (isGraphQLEnabled(state)) {
-            await dispatch(loadMe());
-        } else {
-            await dispatch(loadMeREST());
-        }
+        await dispatch(loadMe());
         state = getState();
         user = getCurrentUser(state);
     }
@@ -367,12 +359,21 @@ export async function redirectUserToDefaultTeam() {
         return;
     }
 
+    // if the user is the first admin
+    const isUserFirstAdmin = isFirstAdmin(state);
+
     const locale = getCurrentLocale(state);
     const teamId = LocalStorageStore.getPreviousTeamId(user.id);
 
     let myTeams = getMyTeams(state);
-    if (myTeams.length === 0) {
-        getHistory().push('/select_team');
+    const teams = getActiveTeamsList(state);
+    if (teams.length === 0) {
+        if (isUserFirstAdmin && onboardingFlowEnabled) {
+            historyPushWithQueryParams('/preparing-workspace', searchParams);
+            return;
+        }
+
+        historyPushWithQueryParams('/select_team', searchParams);
         return;
     }
 
@@ -384,8 +385,9 @@ export async function redirectUserToDefaultTeam() {
     if (team && team.delete_at === 0) {
         const channel = await getTeamRedirectChannelIfIsAccesible(user, team);
         if (channel) {
+            dispatch(fetchTeamScheduledPosts(team.id, true));
             dispatch(selectChannel(channel.id));
-            getHistory().push(`/${team.name}/channels/${channel.name}`);
+            historyPushWithQueryParams(`/${team.name}/channels/${channel.name}`, searchParams);
             return;
         }
     }
@@ -397,10 +399,10 @@ export async function redirectUserToDefaultTeam() {
         const channel = await getTeamRedirectChannelIfIsAccesible(user, myTeam); // eslint-disable-line no-await-in-loop
         if (channel) {
             dispatch(selectChannel(channel.id));
-            getHistory().push(`/${myTeam.name}/channels/${channel.name}`);
+            historyPushWithQueryParams(`/${myTeam.name}/channels/${channel.name}`, searchParams);
             return;
         }
     }
 
-    getHistory().push('/select_team');
+    historyPushWithQueryParams('/select_team', searchParams);
 }

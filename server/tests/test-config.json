@@ -54,7 +54,6 @@
         "EnableUserStatuses": true,
         "ExperimentalEnableAuthenticationTransfer": true,
         "ClusterLogTimeoutMilliseconds": 2000,
-        "EnablePreviewFeatures": true,
         "EnableTutorial": true,
         "EnableOnboardingFlow": true,
         "ExperimentalEnableDefaultChannelLeaveJoinMessages": true,
@@ -90,7 +89,7 @@
     },
     "SqlSettings": {
         "DriverName": "mysql",
-        "DataSource": "mmuser:mostest@tcp(localhost:3306)/mattermost_test?charset=utf8mb4,utf8\u0026readTimeout=30s\u0026writeTimeout=30s",
+        "DataSource": "mmuser:mostest@tcp(localhost:3306)/mattermost_test?charset=utf8mb4\u0026readTimeout=30s\u0026writeTimeout=30s\u0026maxAllowedPacket=4194304",
         "DataSourceReplicas": [],
         "DataSourceSearchReplicas": [],
         "MaxIdleConns": 20,
@@ -115,7 +114,8 @@
         "Lowercase": false,
         "Number": false,
         "Uppercase": false,
-        "Symbol": false
+        "Symbol": false,
+        "EnableForgotLink": true
     },
     "FileSettings": {
         "EnableFileAttachments": true,
@@ -136,7 +136,8 @@
         "AmazonS3SSL": true,
         "AmazonS3SignV2": false,
         "AmazonS3SSE": false,
-        "AmazonS3Trace": false
+        "AmazonS3Trace": false,
+        "AmazonS3StorageClass": ""
     },
     "EmailSettings": {
         "EnableSignUpWithEmail": true,
@@ -166,7 +167,7 @@
         "EmailNotificationContentsType": "full",
         "LoginButtonColor": "",
         "LoginButtonBorderColor": "",
-        "LoginButtonTextColor": "",
+        "LoginButtonTextColor": ""
     },
     "RateLimitSettings": {
         "Enable": false,
@@ -182,11 +183,12 @@
         "ShowFullName": true
     },
     "SupportSettings": {
-        "TermsOfServiceLink": "https://mattermost.com/terms-of-use/",
-        "PrivacyPolicyLink": "https://mattermost.com/privacy-policy/",
+        "TermsOfServiceLink": "https://mattermost.com/pl/terms-of-use/",
+        "PrivacyPolicyLink": "https://mattermost.com/pl/privacy-policy/",
         "AboutLink": "https://mattermost.com/default-about/",
-        "HelpLink": "https://mattermost.com/default-help/",
-        "ReportAProblemLink": "https://mattermost.com/default-report-a-problem/",
+        "HelpLink": "https://mattermost.com/pl/help/",
+        "ReportAProblemLink": "https://mattermost.com/pl/report-a-bug",
+        "ForgotPasswordLink": "",
         "SupportEmail": "feedback@mattermost.com"
     },
     "AnnouncementSettings": {
@@ -295,8 +297,8 @@
     },
     "NativeAppSettings": {
         "AppDownloadLink": "https://mattermost.com/download/",
-        "AndroidAppDownloadLink": "https://mattermost.com/mattermost-android-app/",
-        "IosAppDownloadLink": "https://mattermost.com/mattermost-ios-app/"
+        "AndroidAppDownloadLink": "https://mattermost.com/pl/android-app/",
+        "IosAppDownloadLink": "https://mattermost.com/pl/ios-app/"
     },
     "ClusterSettings": {
         "Enable": false,
@@ -305,11 +307,7 @@
         "UseIPAddress": true,
         "UseExperimentalGossip": true,
         "ReadOnlyConfig": true,
-        "GossipPort": 8074,
-        "StreamingPort": 8075,
-        "MaxIdleConns": 100,
-        "MaxIdleConnsPerHost": 128,
-        "IdleConnTimeoutMilliseconds": 90000
+        "GossipPort": 8074
     },
     "MetricsSettings": {
         "Enable": false,
@@ -325,6 +323,7 @@
     },
     "ElasticsearchSettings": {
         "ConnectionUrl": "http://localhost:9200",
+        "Backend": "elasticsearch",
         "Username": "elastic",
         "Password": "changeme",
         "EnableIndexing": false,
@@ -384,7 +383,6 @@
         }
     },
     "DisplaySettings": {
-        "CustomUrlSchemes": [],
-        "ExperimentalTimezone": false
+        "CustomUrlSchemes": []
     }
 }

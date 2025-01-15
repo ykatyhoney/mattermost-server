@@ -24,8 +24,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/openpgp" //nolint:staticcheck
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
 //go:embed pubkey.gpg
@@ -208,7 +208,7 @@ func UpgradeToE0() error {
 			os.Remove(filename)
 		}
 		setUpgradeError(fmt.Errorf("error downloading the new Mattermost server binary file (percentage: %d)", getUpgradePercentage()))
-		mlog.Error("Unable to download the Mattermost server binary file", mlog.Int64("percentage", getUpgradePercentage()), mlog.String("url", getCurrentVersionTgzURL()), mlog.Err(err))
+		mlog.Error("Unable to download the Mattermost server binary file", mlog.Int("percentage", getUpgradePercentage()), mlog.String("url", getCurrentVersionTgzURL()), mlog.Err(err))
 		setUpgradePercentage(0)
 		return err
 	}

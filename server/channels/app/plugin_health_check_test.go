@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 func TestHealthCheckJob(t *testing.T) {
@@ -21,8 +21,8 @@ func TestHealthCheckJob(t *testing.T) {
 			package main
 
 			import (
-				"github.com/mattermost/mattermost-server/v6/model"
-				"github.com/mattermost/mattermost-server/v6/plugin"
+				"github.com/mattermost/mattermost/server/public/model"
+				"github.com/mattermost/mattermost/server/public/plugin"
 			)
 
 			type MyPlugin struct {
@@ -78,7 +78,8 @@ func TestHealthCheckJob(t *testing.T) {
 	require.Equal(t, model.PluginStateFailedToStayRunning, env.GetPluginState(id))
 
 	// Activated manually, plugin should stay active
-	env.Activate(id)
+	_, _, err = env.Activate(id)
+	require.NoError(t, err)
 	job.CheckPlugin(id)
 	bundles = env.Active()
 	require.Equal(t, 1, len(bundles))

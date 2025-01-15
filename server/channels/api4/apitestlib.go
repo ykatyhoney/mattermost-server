@@ -4,9 +4,7 @@
 package api4
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,23 +19,22 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	graphql "github.com/graph-gophers/graphql-go"
 	s3 "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin/plugintest/mock"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/testlib"
-	"github.com/mattermost/mattermost-server/v6/server/channels/web"
-	"github.com/mattermost/mattermost-server/v6/server/channels/wsapi"
-	"github.com/mattermost/mattermost-server/v6/server/config"
-	"github.com/mattermost/mattermost-server/v6/server/platform/services/searchengine"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/testlib"
+	"github.com/mattermost/mattermost/server/v8/channels/web"
+	"github.com/mattermost/mattermost/server/v8/channels/wsapi"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/mattermost/mattermost/server/v8/platform/services/searchengine"
 )
 
 type TestHelper struct {
@@ -47,7 +44,6 @@ type TestHelper struct {
 
 	Context              *request.Context
 	Client               *model.Client4
-	GraphQLClient        *graphQLClient
 	BasicUser            *model.User
 	BasicUser2           *model.User
 	TeamAdminUser        *model.User
@@ -93,15 +89,31 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 		panic("failed to initialize memory store: " + err.Error())
 	}
 
-	memoryConfig := &model.Config{}
+	memoryConfig := &model.Config{
+		SqlSettings: *mainHelper.GetSQLSettings(),
+	}
 	memoryConfig.SetDefaults()
 	*memoryConfig.PluginSettings.Directory = filepath.Join(tempWorkspace, "plugins")
 	*memoryConfig.PluginSettings.ClientDirectory = filepath.Join(tempWorkspace, "webapp")
-	memoryConfig.ServiceSettings.EnableLocalMode = model.NewBool(true)
+	memoryConfig.ServiceSettings.EnableLocalMode = model.NewPointer(true)
 	*memoryConfig.ServiceSettings.LocalModeSocketLocation = filepath.Join(tempWorkspace, "mattermost_local.sock")
+	*memoryConfig.LogSettings.EnableSentry = false // disable error reporting during tests
+	*memoryConfig.LogSettings.ConsoleLevel = mlog.LvlStdLog.Name
 	*memoryConfig.AnnouncementSettings.AdminNoticesEnabled = false
 	*memoryConfig.AnnouncementSettings.UserNoticesEnabled = false
 	*memoryConfig.PluginSettings.AutomaticPrepackagedPlugins = false
+	// Enabling Redis with Postgres.
+	if *memoryConfig.SqlSettings.DriverName == model.DatabaseDriverPostgres {
+		*memoryConfig.CacheSettings.CacheType = model.CacheTypeRedis
+		redisHost := "localhost"
+		if os.Getenv("IS_CI") == "true" {
+			redisHost = "redis"
+		}
+		*memoryConfig.CacheSettings.RedisAddress = redisHost + ":6379"
+		*memoryConfig.CacheSettings.DisableClientCache = true
+		*memoryConfig.CacheSettings.RedisDB = 0
+		options = append(options, app.ForceEnableRedis())
+	}
 	if updateConfig != nil {
 		updateConfig(memoryConfig)
 	}
@@ -142,13 +154,12 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 	th := &TestHelper{
 		App:               app.New(app.ServerConnector(s.Channels())),
 		Server:            s,
+		Context:           request.EmptyContext(testLogger),
 		ConfigStore:       configStore,
 		IncludeCacheLayer: includeCache,
-		Context:           request.EmptyContext(testLogger),
 		TestLogger:        testLogger,
 		LogBuffer:         buffer,
 	}
-	th.Context.SetLogger(testLogger)
 
 	if s.Platform().SearchEngine != nil && s.Platform().SearchEngine.BleveEngine != nil && searchEngine != nil {
 		searchEngine.BleveEngine = s.Platform().SearchEngine.BleveEngine
@@ -157,6 +168,8 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 	if searchEngine != nil {
 		th.App.SetSearchEngine(searchEngine)
 	}
+
+	th.App.Srv().SetLicense(getLicense(enterprise, memoryConfig))
 
 	th.App.UpdateConfig(func(cfg *model.Config) {
 		*cfg.TeamSettings.MaxUsersPerTeam = 50
@@ -187,14 +200,7 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 	web.New(th.App.Srv())
 	wsapi.Init(th.App.Srv())
 
-	if enterprise {
-		th.App.Srv().SetLicense(model.NewTestLicense())
-	} else {
-		th.App.Srv().SetLicense(nil)
-	}
-
 	th.Client = th.CreateClient()
-	th.GraphQLClient = newGraphQLClient(fmt.Sprintf("http://localhost:%v", th.App.Srv().ListenAddr.Port))
 	th.SystemAdminClient = th.CreateClient()
 	th.SystemManagerClient = th.CreateClient()
 
@@ -204,7 +210,7 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 	falseValues := []string{"0", "f", "F", "FALSE", "false", "False"}
 	trueString := trueValues[rand.Intn(len(trueValues))]
 	falseString := falseValues[rand.Intn(len(falseValues))]
-	mlog.Debug("Configured Client4 bool string values", mlog.String("true", trueString), mlog.String("false", falseString))
+	testLogger.Debug("Configured Client4 bool string values", mlog.String("true", trueString), mlog.String("false", falseString))
 	th.Client.SetBoolString(true, trueString)
 	th.Client.SetBoolString(false, falseString)
 
@@ -215,6 +221,16 @@ func setupTestHelper(dbStore store.Store, searchEngine *searchengine.Broker, ent
 	}
 
 	return th
+}
+
+func getLicense(enterprise bool, cfg *model.Config) *model.License {
+	if *cfg.ConnectedWorkspacesSettings.EnableRemoteClusterService || *cfg.ConnectedWorkspacesSettings.EnableSharedChannels {
+		return model.NewTestLicenseSKU(model.LicenseShortSkuProfessional)
+	}
+	if enterprise {
+		return model.NewTestLicense()
+	}
+	return nil
 }
 
 func SetupEnterprise(tb testing.TB, options ...app.Option) *TestHelper {
@@ -287,6 +303,7 @@ func SetupConfig(tb testing.TB, updateConfig func(cfg *model.Config)) *TestHelpe
 	dbStore := mainHelper.GetStore()
 	dbStore.DropAllTables()
 	dbStore.MarkSystemRanUnitTests()
+	mainHelper.PreloadMigrations()
 	searchEngine := mainHelper.GetSearchEngine()
 	th := setupTestHelper(dbStore, searchEngine, false, true, updateConfig, nil)
 	th.InitLogin()
@@ -350,6 +367,25 @@ func SetupWithServerOptions(tb testing.TB, options []app.Option) *TestHelper {
 	mainHelper.PreloadMigrations()
 	searchEngine := mainHelper.GetSearchEngine()
 	th := setupTestHelper(dbStore, searchEngine, false, true, nil, options)
+	th.InitLogin()
+	return th
+}
+
+func SetupEnterpriseWithServerOptions(tb testing.TB, options []app.Option) *TestHelper {
+	if testing.Short() {
+		tb.SkipNow()
+	}
+
+	if mainHelper == nil {
+		tb.SkipNow()
+	}
+
+	dbStore := mainHelper.GetStore()
+	dbStore.DropAllTables()
+	dbStore.MarkSystemRanUnitTests()
+	mainHelper.PreloadMigrations()
+	searchEngine := mainHelper.GetSearchEngine()
+	th := setupTestHelper(dbStore, searchEngine, true, true, nil, options)
 	th.InitLogin()
 	return th
 }
@@ -472,10 +508,18 @@ func (th *TestHelper) InitBasic() *TestHelper {
 	th.App.AddUserToChannel(th.Context, th.BasicUser, th.BasicDeletedChannel, false)
 	th.App.AddUserToChannel(th.Context, th.BasicUser2, th.BasicDeletedChannel, false)
 	th.App.UpdateUserRoles(th.Context, th.BasicUser.Id, model.SystemUserRoleId, false)
-	th.Client.DeleteChannel(th.BasicDeletedChannel.Id)
+	th.Client.DeleteChannel(context.Background(), th.BasicDeletedChannel.Id)
 	th.LoginBasic()
 	th.Group = th.CreateGroup()
 
+	return th
+}
+
+func (th *TestHelper) DeleteBots() *TestHelper {
+	preexistingBots, _ := th.App.GetBots(th.Context, &model.BotGetOptions{Page: 0, PerPage: 100})
+	for _, bot := range preexistingBots {
+		th.App.PermanentDeleteBot(th.Context, bot.UserId)
+	}
 	return th
 }
 
@@ -538,7 +582,7 @@ func (th *TestHelper) CreateBotWithClient(client *model.Client4) *model.Bot {
 		Description: "bot",
 	}
 
-	rbot, _, err := client.CreateBot(bot)
+	rbot, _, err := client.CreateBot(context.Background(), bot)
 	if err != nil {
 		panic(err)
 	}
@@ -562,7 +606,7 @@ func (th *TestHelper) CreateTeamWithClient(client *model.Client4) *model.Team {
 		Type:        model.TeamOpen,
 	}
 
-	rteam, _, err := client.CreateTeam(team)
+	rteam, _, err := client.CreateTeam(context.Background(), team)
 	if err != nil {
 		panic(err)
 	}
@@ -581,7 +625,7 @@ func (th *TestHelper) CreateUserWithClient(client *model.Client4) *model.User {
 		Password:  "Pa$$word11",
 	}
 
-	ruser, _, err := client.CreateUser(user)
+	ruser, _, err := client.CreateUser(context.Background(), user)
 	if err != nil {
 		panic(err)
 	}
@@ -608,6 +652,41 @@ func (th *TestHelper) CreateUserWithAuth(authService string) *model.User {
 		panic(err)
 	}
 	return user
+}
+
+// CreateGuestAndClient creates a guest user, adds them to the basic
+// team, basic channel and basic private channel, and generates an API
+// client ready to use
+func (th *TestHelper) CreateGuestAndClient() (*model.User, *model.Client4) {
+	id := model.NewId()
+
+	// create a guest user and add it to the basic team and public/private channels
+	guest, cgErr := th.App.CreateGuest(th.Context, &model.User{
+		Email:         "test_guest" + id + "@sample.com",
+		Username:      "guest_" + id,
+		Nickname:      "guest_" + id,
+		Password:      "Password1",
+		EmailVerified: true,
+	})
+	if cgErr != nil {
+		panic(cgErr)
+	}
+
+	_, _, tErr := th.App.AddUserToTeam(th.Context, th.BasicTeam.Id, guest.Id, th.SystemAdminUser.Id)
+	if tErr != nil {
+		panic(tErr)
+	}
+	th.AddUserToChannel(guest, th.BasicChannel)
+	th.AddUserToChannel(guest, th.BasicPrivateChannel)
+
+	// create a client and login the guest
+	guestClient := th.CreateClient()
+	_, _, lErr := guestClient.Login(context.Background(), guest.Username, "Password1")
+	if lErr != nil {
+		panic(lErr)
+	}
+
+	return guest, guestClient
 }
 
 func (th *TestHelper) SetupLdapConfig() {
@@ -672,17 +751,17 @@ func (th *TestHelper) CreateChannelWithClient(client *model.Client4, channelType
 	return th.CreateChannelWithClientAndTeam(client, channelType, th.BasicTeam.Id)
 }
 
-func (th *TestHelper) CreateChannelWithClientAndTeam(client *model.Client4, channelType model.ChannelType, teamId string) *model.Channel {
+func (th *TestHelper) CreateChannelWithClientAndTeam(client *model.Client4, channelType model.ChannelType, teamID string) *model.Channel {
 	id := model.NewId()
 
 	channel := &model.Channel{
 		DisplayName: "dn_" + id,
 		Name:        GenerateTestChannelName(),
 		Type:        channelType,
-		TeamId:      teamId,
+		TeamId:      teamID,
 	}
 
-	rchannel, _, err := client.CreateChannel(channel)
+	rchannel, _, err := client.CreateChannel(context.Background(), channel)
 	if err != nil {
 		panic(err)
 	}
@@ -721,7 +800,7 @@ func (th *TestHelper) CreatePostWithFilesWithClient(client *model.Client4, chann
 		FileIds:   fileIds,
 	}
 
-	rpost, _, err := client.CreatePost(post)
+	rpost, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
 		panic(err)
 	}
@@ -736,7 +815,7 @@ func (th *TestHelper) CreatePostWithClient(client *model.Client4, channel *model
 		Message:   "message_" + id,
 	}
 
-	rpost, _, err := client.CreatePost(post)
+	rpost, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
 		panic(err)
 	}
@@ -752,7 +831,7 @@ func (th *TestHelper) CreatePinnedPostWithClient(client *model.Client4, channel 
 		IsPinned:  true,
 	}
 
-	rpost, _, err := client.CreatePost(post)
+	rpost, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
 		panic(err)
 	}
@@ -765,7 +844,7 @@ func (th *TestHelper) CreateMessagePostWithClient(client *model.Client4, channel
 		Message:   message,
 	}
 
-	rpost, _, err := client.CreatePost(post)
+	rpost, _, err := client.CreatePost(context.Background(), post)
 	if err != nil {
 		panic(err)
 	}
@@ -773,7 +852,7 @@ func (th *TestHelper) CreateMessagePostWithClient(client *model.Client4, channel
 }
 
 func (th *TestHelper) CreateMessagePostNoClient(channel *model.Channel, message string, createAtTime int64) *model.Post {
-	post, err := th.App.Srv().Store().Post().Save(&model.Post{
+	post, err := th.App.Srv().Store().Post().Save(th.Context, &model.Post{
 		UserId:    th.BasicUser.Id,
 		ChannelId: channel.Id,
 		Message:   message,
@@ -796,18 +875,29 @@ func (th *TestHelper) CreateDmChannel(user *model.User) *model.Channel {
 	return channel
 }
 
+func (th *TestHelper) PatchChannelModerationsForMembers(channelId, name string, val bool) {
+	patch := []*model.ChannelModerationPatch{{
+		Name:  &name,
+		Roles: &model.ChannelModeratedRolesPatch{Members: model.NewPointer(val)},
+	}}
+
+	channel, err := th.App.GetChannel(th.Context, channelId)
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = th.App.PatchChannelModerationsForChannel(th.Context, channel, patch)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func (th *TestHelper) LoginBasic() {
 	th.LoginBasicWithClient(th.Client)
-	if os.Getenv("MM_FEATUREFLAGS_GRAPHQL") == "true" {
-		th.LoginBasicWithGraphQL()
-	}
 }
 
 func (th *TestHelper) LoginBasic2() {
 	th.LoginBasic2WithClient(th.Client)
-	if os.Getenv("MM_FEATUREFLAGS_GRAPHQL") == "true" {
-		th.LoginBasicWithGraphQL()
-	}
 }
 
 func (th *TestHelper) LoginTeamAdmin() {
@@ -823,42 +913,35 @@ func (th *TestHelper) LoginSystemManager() {
 }
 
 func (th *TestHelper) LoginBasicWithClient(client *model.Client4) {
-	_, _, err := client.Login(th.BasicUser.Email, th.BasicUser.Password)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func (th *TestHelper) LoginBasicWithGraphQL() {
-	_, _, err := th.GraphQLClient.login(th.BasicUser.Email, th.BasicUser.Password)
+	_, _, err := client.Login(context.Background(), th.BasicUser.Email, th.BasicUser.Password)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (th *TestHelper) LoginBasic2WithClient(client *model.Client4) {
-	_, _, err := client.Login(th.BasicUser2.Email, th.BasicUser2.Password)
+	_, _, err := client.Login(context.Background(), th.BasicUser2.Email, th.BasicUser2.Password)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (th *TestHelper) LoginTeamAdminWithClient(client *model.Client4) {
-	_, _, err := client.Login(th.TeamAdminUser.Email, th.TeamAdminUser.Password)
+	_, _, err := client.Login(context.Background(), th.TeamAdminUser.Email, th.TeamAdminUser.Password)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (th *TestHelper) LoginSystemManagerWithClient(client *model.Client4) {
-	_, _, err := client.Login(th.SystemManagerUser.Email, th.SystemManagerUser.Password)
+	_, _, err := client.Login(context.Background(), th.SystemManagerUser.Email, th.SystemManagerUser.Password)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (th *TestHelper) LoginSystemAdminWithClient(client *model.Client4) {
-	_, _, err := client.Login(th.SystemAdminUser.Email, th.SystemAdminUser.Password)
+	_, _, err := client.Login(context.Background(), th.SystemAdminUser.Email, th.SystemAdminUser.Password)
 	if err != nil {
 		panic(err)
 	}
@@ -910,10 +993,10 @@ func (th *TestHelper) GenerateTestEmail() string {
 func (th *TestHelper) CreateGroup() *model.Group {
 	id := model.NewId()
 	group := &model.Group{
-		Name:        model.NewString("n-" + id),
+		Name:        model.NewPointer("n-" + id),
 		DisplayName: "dn_" + id,
 		Source:      model.GroupSourceLdap,
-		RemoteId:    model.NewString("ri_" + model.NewId()),
+		RemoteId:    model.NewPointer("ri_" + model.NewId()),
 	}
 
 	group, err := th.App.CreateGroup(group)
@@ -979,7 +1062,7 @@ func GenerateTestAppName() string {
 	return "fakeoauthapp" + model.NewRandomString(10)
 }
 
-func GenerateTestId() string {
+func GenerateTestID() string {
 	return model.NewId()
 }
 
@@ -1015,6 +1098,11 @@ func CheckCreatedStatus(tb testing.TB, resp *model.Response) {
 	checkHTTPStatus(tb, resp, http.StatusCreated)
 }
 
+func CheckNoContentStatus(tb testing.TB, resp *model.Response) {
+	tb.Helper()
+	checkHTTPStatus(tb, resp, http.StatusNoContent)
+}
+
 func CheckForbiddenStatus(tb testing.TB, resp *model.Response) {
 	tb.Helper()
 	checkHTTPStatus(tb, resp, http.StatusForbidden)
@@ -1033,6 +1121,11 @@ func CheckNotFoundStatus(tb testing.TB, resp *model.Response) {
 func CheckBadRequestStatus(tb testing.TB, resp *model.Response) {
 	tb.Helper()
 	checkHTTPStatus(tb, resp, http.StatusBadRequest)
+}
+
+func CheckUnprocessableEntityStatus(tb testing.TB, resp *model.Response) {
+	tb.Helper()
+	checkHTTPStatus(tb, resp, http.StatusUnprocessableEntity)
 }
 
 func CheckNotImplementedStatus(tb testing.TB, resp *model.Response) {
@@ -1077,12 +1170,6 @@ func CheckErrorMessage(tb testing.TB, err error, message string) {
 	require.True(tb, ok, "should have been a model.AppError")
 
 	require.Equalf(tb, message, appError.Message, "incorrect error message, actual: %s, expected: %s", appError.Id, message)
-}
-
-func CheckStartsWith(tb testing.TB, value, prefix, message string) {
-	tb.Helper()
-
-	require.True(tb, strings.HasPrefix(value, prefix), message, value)
 }
 
 // Similar to s3.New() but allows initialization of signature v2 or signature v4 client.
@@ -1159,7 +1246,7 @@ func (th *TestHelper) cleanupTestFile(info *model.FileInfo) error {
 func (th *TestHelper) MakeUserChannelAdmin(user *model.User, channel *model.Channel) {
 	if cm, err := th.App.Srv().Store().Channel().GetMember(context.Background(), channel.Id, user.Id); err == nil {
 		cm.SchemeAdmin = true
-		if _, err = th.App.Srv().Store().Channel().UpdateMember(cm); err != nil {
+		if _, err = th.App.Srv().Store().Channel().UpdateMember(th.Context, cm); err != nil {
 			panic(err)
 		}
 	} else {
@@ -1168,9 +1255,9 @@ func (th *TestHelper) MakeUserChannelAdmin(user *model.User, channel *model.Chan
 }
 
 func (th *TestHelper) UpdateUserToTeamAdmin(user *model.User, team *model.Team) {
-	if tm, err := th.App.Srv().Store().Team().GetMember(context.Background(), team.Id, user.Id); err == nil {
+	if tm, err := th.App.Srv().Store().Team().GetMember(th.Context, team.Id, user.Id); err == nil {
 		tm.SchemeAdmin = true
-		if _, err = th.App.Srv().Store().Team().UpdateMember(tm); err != nil {
+		if _, err = th.App.Srv().Store().Team().UpdateMember(th.Context, tm); err != nil {
 			panic(err)
 		}
 	} else {
@@ -1179,9 +1266,9 @@ func (th *TestHelper) UpdateUserToTeamAdmin(user *model.User, team *model.Team) 
 }
 
 func (th *TestHelper) UpdateUserToNonTeamAdmin(user *model.User, team *model.Team) {
-	if tm, err := th.App.Srv().Store().Team().GetMember(context.Background(), team.Id, user.Id); err == nil {
+	if tm, err := th.App.Srv().Store().Team().GetMember(th.Context, team.Id, user.Id); err == nil {
 		tm.SchemeAdmin = false
-		if _, err = th.App.Srv().Store().Team().UpdateMember(tm); err != nil {
+		if _, err = th.App.Srv().Store().Team().UpdateMember(th.Context, tm); err != nil {
 			panic(err)
 		}
 	} else {
@@ -1293,23 +1380,4 @@ func (th *TestHelper) SetupScheme(scope string) *model.Scheme {
 		panic(err)
 	}
 	return scheme
-}
-
-func (th *TestHelper) MakeGraphQLRequest(input *graphQLInput) (*graphql.Response, error) {
-	url := fmt.Sprintf("http://localhost:%v", th.App.Srv().ListenAddr.Port) + model.APIURLSuffixV5 + "/graphql"
-
-	buf, err := json.Marshal(input)
-	if err != nil {
-		panic(err)
-	}
-
-	resp, err := th.GraphQLClient.doAPIRequest("POST", url, bytes.NewReader(buf), map[string]string{})
-	if err != nil {
-		panic(err)
-	}
-	defer closeBody(resp)
-
-	var gqlResp *graphql.Response
-	err = json.NewDecoder(resp.Body).Decode(&gqlResp)
-	return gqlResp, err
 }

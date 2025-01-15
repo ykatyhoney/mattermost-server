@@ -1,21 +1,20 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React, {useState, useEffect} from 'react';
 import {useSelector} from 'react-redux';
-import classNames from 'classnames';
-
-import {Tooltip} from 'react-bootstrap';
 
 import {getCurrentChannel, getMyCurrentChannelMembership} from 'mattermost-redux/selectors/entities/channels';
 
 import {getActiveRhsComponent} from 'selectors/rhs';
 
-import {PluginComponent, AppBarComponent} from 'types/store/plugins';
-import Constants, {suitePluginIds} from 'utils/constants';
-
-import OverlayTrigger from 'components/overlay_trigger';
 import PluginIcon from 'components/widgets/icons/plugin_icon';
+import WithTooltip from 'components/with_tooltip';
+
+import {suitePluginIds} from 'utils/constants';
+
+import type {PluginComponent, AppBarComponent} from 'types/store/plugins';
 
 import NewChannelWithBoardTourTip from './new_channel_with_board_tour_tip';
 
@@ -56,17 +55,17 @@ const AppBarPluginComponent = (props: PluginComponentProps) => {
 
     const buttonId = `app-bar-icon-${component.pluginId}`;
     const tooltipText = component.tooltipText || component.dropdownText || component.pluginId;
-    const tooltip = (
-        <Tooltip id={'pluginTooltip-' + buttonId}>
-            <span>{tooltipText}</span>
-        </Tooltip>
-    );
 
     const iconUrl = component.iconUrl;
     let content: React.ReactNode = (
-        <div className='app-bar__icon-inner'>
+        <div
+            role='button'
+            tabIndex={0}
+            className='app-bar__icon-inner'
+        >
             <img
                 src={iconUrl}
+                alt={component.pluginId}
                 onLoad={onImageLoadComplete}
                 onError={onImageLoadError}
             />
@@ -77,7 +76,11 @@ const AppBarPluginComponent = (props: PluginComponentProps) => {
 
     if (!iconUrl) {
         content = (
-            <div className={classNames('app-bar__old-icon app-bar__icon-inner app-bar__icon-inner--centered', {'app-bar__old-icon--active': isButtonActive})}>
+            <div
+                role='button'
+                tabIndex={0}
+                className={classNames('app-bar__old-icon app-bar__icon-inner app-bar__icon-inner--centered', {'app-bar__old-icon--active': isButtonActive})}
+            >
                 {component.icon}
             </div>
         );
@@ -89,14 +92,12 @@ const AppBarPluginComponent = (props: PluginComponentProps) => {
         );
     }
 
-    const boardsEnabled = component.pluginId === suitePluginIds.focalboard || component.pluginId === suitePluginIds.boards;
+    const boardsEnabled = component.pluginId === suitePluginIds.focalboard;
 
     return (
-        <OverlayTrigger
-            trigger={['hover', 'focus']}
-            delayShow={Constants.OVERLAY_TIME_DELAY}
-            placement='left'
-            overlay={tooltip}
+        <WithTooltip
+            title={tooltipText}
+            isVertical={false}
         >
             <div
                 id={buttonId}
@@ -108,7 +109,7 @@ const AppBarPluginComponent = (props: PluginComponentProps) => {
                 {content}
                 {boardsEnabled && <NewChannelWithBoardTourTip/>}
             </div>
-        </OverlayTrigger>
+        </WithTooltip>
     );
 };
 

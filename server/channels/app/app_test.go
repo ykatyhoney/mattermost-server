@@ -12,12 +12,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
 )
 
-/* Temporarily comment out until MM-11108
+/* TODO: Temporarily comment out until MM-11108
 func TestAppRace(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		a, err := New()
@@ -61,6 +62,8 @@ func TestUnitUpdateConfig(t *testing.T) {
 
 	prev := *th.App.Config().ServiceSettings.SiteURL
 
+	require.False(t, th.App.IsConfigReadOnly())
+
 	var called int32
 	th.App.AddConfigListener(func(old, current *model.Config) {
 		atomic.AddInt32(&called, 1)
@@ -82,7 +85,8 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 
 	th.ResetRoleMigration()
 
-	th.App.DoAdvancedPermissionsMigration()
+	err := th.App.DoAdvancedPermissionsMigration()
+	require.NoError(t, err)
 
 	roleNames := []string{
 		"system_user",
@@ -109,6 +113,7 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 	expected1 := map[string][]string{
 		"channel_user": {
 			model.PermissionReadChannel.Id,
+			model.PermissionReadChannelContent.Id,
 			model.PermissionAddReaction.Id,
 			model.PermissionRemoveReaction.Id,
 			model.PermissionManagePublicChannelMembers.Id,
@@ -116,7 +121,6 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 			model.PermissionGetPublicLink.Id,
 			model.PermissionCreatePost.Id,
 			model.PermissionUseChannelMentions.Id,
-			model.PermissionUseSlashCommands.Id,
 			model.PermissionManagePublicChannelProperties.Id,
 			model.PermissionDeletePublicChannel.Id,
 			model.PermissionManagePrivateChannelProperties.Id,
@@ -124,10 +128,26 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 			model.PermissionManagePrivateChannelMembers.Id,
 			model.PermissionDeletePost.Id,
 			model.PermissionEditPost.Id,
+			model.PermissionAddBookmarkPublicChannel.Id,
+			model.PermissionEditBookmarkPublicChannel.Id,
+			model.PermissionDeleteBookmarkPublicChannel.Id,
+			model.PermissionOrderBookmarkPublicChannel.Id,
+			model.PermissionAddBookmarkPrivateChannel.Id,
+			model.PermissionEditBookmarkPrivateChannel.Id,
+			model.PermissionDeleteBookmarkPrivateChannel.Id,
+			model.PermissionOrderBookmarkPrivateChannel.Id,
 		},
 		"channel_admin": {
 			model.PermissionManageChannelRoles.Id,
 			model.PermissionUseGroupMentions.Id,
+			model.PermissionAddBookmarkPublicChannel.Id,
+			model.PermissionEditBookmarkPublicChannel.Id,
+			model.PermissionDeleteBookmarkPublicChannel.Id,
+			model.PermissionOrderBookmarkPublicChannel.Id,
+			model.PermissionAddBookmarkPrivateChannel.Id,
+			model.PermissionEditBookmarkPrivateChannel.Id,
+			model.PermissionDeleteBookmarkPrivateChannel.Id,
+			model.PermissionOrderBookmarkPrivateChannel.Id,
 		},
 		"team_user": {
 			model.PermissionListTeamChannels.Id,
@@ -163,6 +183,14 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 			model.PermissionConvertPrivateChannelToPublic.Id,
 			model.PermissionDeletePost.Id,
 			model.PermissionDeleteOthersPosts.Id,
+			model.PermissionAddBookmarkPublicChannel.Id,
+			model.PermissionEditBookmarkPublicChannel.Id,
+			model.PermissionDeleteBookmarkPublicChannel.Id,
+			model.PermissionOrderBookmarkPublicChannel.Id,
+			model.PermissionAddBookmarkPrivateChannel.Id,
+			model.PermissionEditBookmarkPrivateChannel.Id,
+			model.PermissionDeleteBookmarkPrivateChannel.Id,
+			model.PermissionOrderBookmarkPrivateChannel.Id,
 		},
 		"system_user": {
 			model.PermissionListPublicTeams.Id,
@@ -205,7 +233,8 @@ func TestDoAdvancedPermissionsMigration(t *testing.T) {
 	th.App.Srv().SetLicense(model.NewTestLicense())
 
 	// Check the migration doesn't change anything if run again.
-	th.App.DoAdvancedPermissionsMigration()
+	err = th.App.DoAdvancedPermissionsMigration()
+	require.NoError(t, err)
 
 	roles2, err2 := th.App.GetRolesByNames(roleNames)
 	assert.Nil(t, err2)
@@ -226,7 +255,8 @@ func TestDoEmojisPermissionsMigration(t *testing.T) {
 	sort.Strings(expectedSystemAdmin)
 
 	th.ResetEmojisMigration()
-	th.App.DoEmojisPermissionsMigration()
+	err := th.App.DoEmojisPermissionsMigration()
+	require.NoError(t, err)
 
 	role3, err3 := th.App.GetRoleByName(context.Background(), model.SystemUserRoleId)
 	assert.Nil(t, err3)

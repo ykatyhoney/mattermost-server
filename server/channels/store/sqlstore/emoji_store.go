@@ -4,16 +4,16 @@
 package sqlstore
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
 )
 
 type SqlEmojiStore struct {
@@ -34,7 +34,7 @@ func (es SqlEmojiStore) Save(emoji *model.Emoji) (*model.Emoji, error) {
 		return nil, err
 	}
 
-	if _, err := es.GetMasterX().NamedExec(`INSERT INTO Emoji
+	if _, err := es.GetMaster().NamedExec(`INSERT INTO Emoji
 		(Id, CreateAt, UpdateAt, DeleteAt, CreatorId, Name)
 		VALUES
 		(:Id, :CreateAt, :UpdateAt, :DeleteAt, :CreatorId, :Name)`, emoji); err != nil {
@@ -44,21 +44,21 @@ func (es SqlEmojiStore) Save(emoji *model.Emoji) (*model.Emoji, error) {
 	return emoji, nil
 }
 
-func (es SqlEmojiStore) Get(ctx context.Context, id string, allowFromCache bool) (*model.Emoji, error) {
-	return es.getBy(ctx, "Id", id)
+func (es SqlEmojiStore) Get(c request.CTX, id string, allowFromCache bool) (*model.Emoji, error) {
+	return es.getBy(c, "Id", id)
 }
 
-func (es SqlEmojiStore) GetByName(ctx context.Context, name string, allowFromCache bool) (*model.Emoji, error) {
-	return es.getBy(ctx, "Name", name)
+func (es SqlEmojiStore) GetByName(c request.CTX, name string, allowFromCache bool) (*model.Emoji, error) {
+	return es.getBy(c, "Name", name)
 }
 
-func (es SqlEmojiStore) GetMultipleByName(names []string) ([]*model.Emoji, error) {
+func (es SqlEmojiStore) GetMultipleByName(c request.CTX, names []string) ([]*model.Emoji, error) {
 	// Creating (?, ?, ?) len(names) number of times.
 	keys := strings.Join(strings.Fields(strings.Repeat("? ", len(names))), ",")
 	args := makeStringArgs(names)
 
 	emojis := []*model.Emoji{}
-	if err := es.GetReplicaX().Select(&emojis,
+	if err := es.DBXFromContext(c.Context()).Select(&emojis,
 		`SELECT
 			*
 		FROM
@@ -82,14 +82,14 @@ func (es SqlEmojiStore) GetList(offset, limit int, sort string) ([]*model.Emoji,
 
 	query += " LIMIT ? OFFSET ?"
 
-	if err := es.GetReplicaX().Select(&emojis, query, limit, offset); err != nil {
+	if err := es.GetReplica().Select(&emojis, query, limit, offset); err != nil {
 		return nil, errors.Wrap(err, "could not get list of emojis")
 	}
 	return emojis, nil
 }
 
 func (es SqlEmojiStore) Delete(emoji *model.Emoji, time int64) error {
-	if sqlResult, err := es.GetMasterX().Exec(
+	if sqlResult, err := es.GetMaster().Exec(
 		`UPDATE
 			Emoji
 		SET
@@ -118,7 +118,7 @@ func (es SqlEmojiStore) Search(name string, prefixOnly bool, limit int) ([]*mode
 
 	term += name + "%"
 
-	if err := es.GetReplicaX().Select(&emojis,
+	if err := es.GetReplica().Select(&emojis,
 		`SELECT
 			*
 		FROM
@@ -134,10 +134,10 @@ func (es SqlEmojiStore) Search(name string, prefixOnly bool, limit int) ([]*mode
 }
 
 // getBy returns one active (not deleted) emoji, found by any one column (what/key).
-func (es SqlEmojiStore) getBy(ctx context.Context, what, key string) (*model.Emoji, error) {
+func (es SqlEmojiStore) getBy(c request.CTX, what, key string) (*model.Emoji, error) {
 	var emoji model.Emoji
 
-	err := es.DBXFromContext(ctx).Get(&emoji,
+	err := es.DBXFromContext(c.Context()).Get(&emoji,
 		`SELECT
 			*
 		FROM

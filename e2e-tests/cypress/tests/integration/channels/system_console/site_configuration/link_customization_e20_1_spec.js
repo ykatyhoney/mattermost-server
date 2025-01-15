@@ -21,6 +21,7 @@ describe('SupportSettings', () => {
     const aboutLink = 'https://mattermost.com/default-about/';
     const helpLink = 'https://github.com/mattermost/platform/blob/master/doc/help/README.md';
     const problemLink = 'https://forum.mattermost.com/c/trouble-shoot';
+    const askCommunityLink = 'https://mattermost.com/pl/default-ask-mattermost-community';
 
     before(() => {
         cy.shouldNotRunOnCloudEdition();
@@ -52,11 +53,11 @@ describe('SupportSettings', () => {
             // * Verify links changed
             [
                 {text: 'Report a problem', link: problemLink},
-                {text: 'Help resources', link: helpLink},
+                {text: 'Ask the community', link: askCommunityLink},
             ].forEach((guide) => {
                 cy.findByText(guide.text).
                     parent().
-                    should('have.attr', 'href', guide.link);
+                    should('have.attr', 'href').and('match', new RegExp(`${guide.link}/*`));
             });
         });
 
@@ -76,7 +77,7 @@ describe('SupportSettings', () => {
         // * Verify that links are correct at login page
         guides.forEach((guide) => {
             cy.findByText(guide.text).
-                should('have.attr', 'href', guide.link);
+                should('have.attr', 'href').and('match', new RegExp(`${guide.link}/*`));
         });
 
         // # Visit signup page
@@ -87,7 +88,7 @@ describe('SupportSettings', () => {
         cy.get('.hfroute-footer').scrollIntoView().should('be.visible').within(() => {
             guides.forEach((guide) => {
                 cy.findByText(guide.text).
-                    should('have.attr', 'href', guide.link);
+                    should('have.attr', 'href').and('match', new RegExp(`${guide.link}/*`));
             });
         });
     });
@@ -107,7 +108,7 @@ describe('SupportSettings', () => {
 
         // * Verify that terms of services link is set to default
         cy.findByText('Terms').
-            should('have.attr', 'href', TERMS_OF_SERVICE_LINK);
+            should('have.attr', 'href').and('match', new RegExp(`${TERMS_OF_SERVICE_LINK}/*`));
     });
 
     it('MM-T1036 - Customization: Blank Help and Report a Problem hides options from help menu', () => {
@@ -167,14 +168,13 @@ describe('SupportSettings', () => {
         cy.uiOpenHelpMenu().within(() => {
             // * Verify 4 options shown
             cy.findByText('Ask the community');
-            cy.findByText('Help resources');
             cy.findByText('Report a problem');
             cy.findByText('Keyboard shortcuts');
 
             // * Verify default link of Ask the community
             cy.findByText('Ask the community').
                 parent().
-                should('have.attr', 'href', 'https://mattermost.com/pl/default-ask-mattermost-community/');
+                should('have.attr', 'href').and('match', new RegExp(`${askCommunityLink}/*`));
         });
     });
 
@@ -192,20 +192,14 @@ describe('SupportSettings', () => {
 
         // # Open help menu
         cy.uiOpenHelpMenu().within(() => {
-            // * Verify 3 options shown
-            cy.findByText('Help resources');
+            // * Verify 2 options shown
             cy.findByText('Report a problem');
             cy.findByText('Keyboard shortcuts');
-
-            // * Verify help link has changed
-            cy.findByText('Help resources').
-                parent().
-                should('have.attr', 'href', helpLink);
 
             // * Verify report a problem link has changed
             cy.findByText('Report a problem').
                 parent().
-                should('have.attr', 'href', problemLink);
+                should('have.attr', 'href').and('match', new RegExp(`${problemLink}/*`));
 
             // # Click on keyboard shortcuts
             cy.findByText('Keyboard shortcuts').click();

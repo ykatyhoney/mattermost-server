@@ -1,8 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
 
 import FilenameOverlay from 'components/file_attachment/filename_overlay';
 import AttachmentIcon from 'components/widgets/icons/attachment_icon';
@@ -17,6 +17,7 @@ describe('components/file_attachment/FilenameOverlay', () => {
         height: 80,
         has_preview_image: true,
         user_id: '',
+        channel_id: 'channel_id',
         create_at: 0,
         update_at: 0,
         delete_at: 0,

@@ -1,33 +1,38 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {MouseEvent, KeyboardEvent} from 'react';
-import {FormattedMessage} from 'react-intl';
-import {Draggable, Droppable} from 'react-beautiful-dnd';
 import classNames from 'classnames';
+import React from 'react';
+import type {MouseEvent, KeyboardEvent} from 'react';
+import {Draggable, Droppable} from 'react-beautiful-dnd';
+import {FormattedMessage, defineMessages} from 'react-intl';
+
+import type {ChannelCategory} from '@mattermost/types/channel_categories';
+import {CategorySorting} from '@mattermost/types/channel_categories';
+import type {PreferenceType} from '@mattermost/types/preferences';
 
 import {CategoryTypes} from 'mattermost-redux/constants/channel_categories';
-import {ChannelCategory, CategorySorting} from '@mattermost/types/channel_categories';
-import {PreferenceType} from '@mattermost/types/preferences';
 import {localizeMessage} from 'mattermost-redux/utils/i18n_utils';
+
 import {trackEvent} from 'actions/telemetry_actions';
-import OverlayTrigger from 'components/overlay_trigger';
-import Tooltip from 'components/tooltip';
-import {DraggingState} from 'types/store';
-import Constants, {A11yCustomEventTypes, DraggingStateTypes, DraggingStates, Preferences, Touched} from 'utils/constants';
-import {t} from 'utils/i18n';
-import {isKeyPressed} from 'utils/keyboard';
-import SidebarChannel from '../sidebar_channel';
-import {SidebarCategoryHeader} from '../sidebar_category_header';
-import InviteMembersButton from '../invite_members_button';
+
 import KeyboardShortcutSequence, {
     KEYBOARD_SHORTCUTS,
 } from 'components/keyboard_shortcuts/keyboard_shortcuts_sequence';
+import WithTooltip from 'components/with_tooltip';
+
+import Constants, {A11yCustomEventTypes, DraggingStateTypes, DraggingStates} from 'utils/constants';
+import {isKeyPressed} from 'utils/keyboard';
+
+import type {DraggingState} from 'types/store';
+
+import SidebarCategoryMenu from './sidebar_category_menu';
+import SidebarCategorySortingMenu from './sidebar_category_sorting_menu';
 
 import AddChannelsCtaButton from '../add_channels_cta_button';
-
-import SidebarCategorySortingMenu from './sidebar_category_sorting_menu';
-import SidebarCategoryMenu from './sidebar_category_menu';
+import InviteMembersButton from '../invite_members_button';
+import {SidebarCategoryHeader} from '../sidebar_category_header';
+import SidebarChannel from '../sidebar_channel';
 
 type Props = {
     category: ChannelCategory;
@@ -38,7 +43,6 @@ type Props = {
     isNewCategory: boolean;
     draggingState: DraggingState;
     currentUserId: string;
-    touchedInviteMembersButton: boolean;
     isAdmin: boolean;
     actions: {
         setCategoryCollapsed: (categoryId: string, collapsed: boolean) => void;
@@ -169,7 +173,7 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
         }
 
         return (
-            <React.Fragment>
+            <>
                 <Draggable
                     draggableId={`NEW_CHANNEL_SPACER__${category.id}`}
                     isDragDisabled={true}
@@ -208,7 +212,7 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
                         </span>
                     </div>
                 </div>
-            </React.Fragment>
+            </>
         );
     };
 
@@ -263,32 +267,25 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
 
             categoryMenu = <SidebarCategoryMenu category={category}/>;
         } else if (category.type === CategoryTypes.DIRECT_MESSAGES) {
-            const addHelpLabel = localizeMessage('sidebar.createDirectMessage', 'Create new direct message');
-
-            const addTooltip = (
-                <Tooltip
-                    id='new-group-tooltip'
-                    className='hidden-xs'
-                >
-                    {addHelpLabel}
-                    <KeyboardShortcutSequence
-                        shortcut={KEYBOARD_SHORTCUTS.navDMMenu}
-                        hideDescription={true}
-                        isInsideTooltip={true}
-                    />
-                </Tooltip>
-            );
+            const addHelpLabel = localizeMessage({id: 'sidebar.createDirectMessage', defaultMessage: 'Create new direct message'});
 
             categoryMenu = (
-                <React.Fragment>
+                <>
                     <SidebarCategorySortingMenu
                         category={category}
                         handleOpenDirectMessagesModal={this.handleOpenDirectMessagesModal}
                     />
-                    <OverlayTrigger
-                        delayShow={500}
-                        placement='top'
-                        overlay={addTooltip}
+                    <WithTooltip
+                        title={
+                            <>
+                                {addHelpLabel}
+                                <KeyboardShortcutSequence
+                                    shortcut={KEYBOARD_SHORTCUTS.navDMMenu}
+                                    hideDescription={true}
+                                    isInsideTooltip={true}
+                                />
+                            </>
+                        }
                     >
                         <button
                             className='SidebarChannelGroupHeader_addButton'
@@ -297,8 +294,8 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
                         >
                             <i className='icon-plus'/>
                         </button>
-                    </OverlayTrigger>
-                </React.Fragment>
+                    </WithTooltip>
+                </>
             );
 
             if (!channelIds || !channelIds.length) {
@@ -310,7 +307,8 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
 
         let displayName = category.display_name;
         if (category.type !== CategoryTypes.CUSTOM) {
-            displayName = localizeMessage(`sidebar.types.${category.type}`, category.display_name);
+            const message = categoryNames[category.type as keyof typeof categoryNames];
+            displayName = localizeMessage({id: message.id, defaultMessage: message.defaultMessage});
         }
 
         return (
@@ -325,21 +323,7 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
                         inviteMembersButton = (
                             <InviteMembersButton
                                 className='followingSibling'
-                                touchedInviteMembersButton={this.props.touchedInviteMembersButton}
                                 isAdmin={this.props.isAdmin}
-                                onClick={() => {
-                                    if (!this.props.touchedInviteMembersButton) {
-                                        this.props.actions.savePreferences(
-                                            this.props.currentUserId,
-                                            [{
-                                                category: Preferences.TOUCHED,
-                                                user_id: this.props.currentUserId,
-                                                name: Touched.INVITE_MEMBERS,
-                                                value: 'true',
-                                            }],
-                                        );
-                                    }
-                                }}
                             />
                         );
                     }
@@ -417,7 +401,17 @@ export default class SidebarCategory extends React.PureComponent<Props, State> {
     }
 }
 
-// Adding references to translations for i18n-extract
-t('sidebar.types.channels');
-t('sidebar.types.direct_messages');
-t('sidebar.types.favorites');
+const categoryNames = defineMessages({
+    channels: {
+        id: 'sidebar.types.channels',
+        defaultMessage: 'CHANNELS',
+    },
+    direct_messages: {
+        id: 'sidebar.types.direct_messages',
+        defaultMessage: 'DIRECT MESSAGES',
+    },
+    favorites: {
+        id: 'sidebar.types.favorites',
+        defaultMessage: 'FAVORITES',
+    },
+});

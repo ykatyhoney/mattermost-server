@@ -1,8 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
 
 import menuItem from './menu_item';
 
@@ -35,6 +35,7 @@ describe('components/MenuItem', () => {
             >
               <Component
                 ariaLabel="test-text"
+                id="test-id-button"
                 otherProp="extra-prop"
                 text={
                   <React.Fragment>
@@ -43,7 +44,11 @@ describe('components/MenuItem', () => {
                     >
                       test-icon
                     </span>
-                    test-text
+                    <div
+                      className="text"
+                    >
+                      test-text
+                    </div>
                   </React.Fragment>
                 }
               />
@@ -62,6 +67,7 @@ describe('components/MenuItem', () => {
             >
               <Component
                 ariaLabel="test-text"
+                id="test-id-button"
                 otherProp="extra-prop"
                 text="test-text"
               />

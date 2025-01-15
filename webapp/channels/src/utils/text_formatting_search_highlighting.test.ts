@@ -1,8 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import * as TextFormatting from 'utils/text_formatting';
 import EmojiMap from 'utils/emoji_map';
+import * as TextFormatting from 'utils/text_formatting';
 const emojiMap = new EmojiMap(new Map());
 
 describe('TextFormatting.searchHighlighting', () => {
@@ -94,6 +94,11 @@ describe('TextFormatting.searchHighlighting', () => {
         input: 'These are [words in a sentence](https://example.com).',
         searchMatches: ['example'],
         expected: '<p>These are <a class="theme markdown__link search-highlight" href="https://example.com" rel="noreferrer" target="_blank">words in a sentence</a>.</p>',
+    }, {
+        name: 'search match thai word',
+        input: 'สวัสดีนี่คือการทดสอบภาษาไทย',
+        searchMatches: ['สวัสดี'],
+        expected: '<p><span class="search-highlight">สวัสดี</span>นี่คือการทดสอบภาษาไทย</p>',
     }];
 
     for (const testCase of testCases) {

@@ -9,8 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 var searchPostStoreTests = []searchTest{
@@ -30,9 +31,9 @@ var searchPostStoreTests = []searchTest{
 		Tags: []string{EngineAll},
 	},
 	{
-		Name: "Should be able to search for exact phrases in quotes",
-		Fn:   testSearchExactPhraseInQuotes,
-		Tags: []string{EnginePostgres, EngineMySql, EngineElasticSearch},
+		Name: "Should be able to search for quoted patterns with AND OR combinations",
+		Fn:   testSearchANDORQuotesCombinations,
+		Tags: []string{EnginePostgres, EngineMySQL, EngineElasticSearch},
 	},
 	{
 		// Postgres supports search with and without quotes
@@ -44,7 +45,7 @@ var searchPostStoreTests = []searchTest{
 		// MySql supports search with quotes only
 		Name: "Should be able to search for email addresses with quotes",
 		Fn:   testSearchEmailAddressesWithQuotes,
-		Tags: []string{EngineMySql},
+		Tags: []string{EngineMySQL},
 	},
 	{
 		Name: "Should be able to search when markdown underscores are applied",
@@ -99,12 +100,12 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should be able to exclude messages that contain a search term",
 		Fn:   testFilterMessagesWithATerm,
-		Tags: []string{EngineMySql, EnginePostgres},
+		Tags: []string{EngineMySQL, EnginePostgres},
 	},
 	{
 		Name: "Should be able to search using boolean operators",
 		Fn:   testSearchUsingBooleanOperators,
-		Tags: []string{EngineMySql, EnginePostgres, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EnginePostgres, EngineElasticSearch},
 	},
 	{
 		Name: "Should be able to search with combined filters",
@@ -114,7 +115,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should be able to ignore stop words",
 		Fn:   testSearchIgnoringStopWords,
-		Tags: []string{EngineMySql, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EngineElasticSearch},
 	},
 	{
 		Name: "Should support search stemming",
@@ -145,7 +146,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should support terms with underscore",
 		Fn:   testSupportTermsWithUnderscore,
-		Tags: []string{EngineMySql, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EngineElasticSearch},
 	},
 	{
 		Name: "Should search or exclude post using hashtags",
@@ -193,6 +194,11 @@ var searchPostStoreTests = []searchTest{
 		Tags: []string{EngineAll},
 	},
 	{
+		Name: "Should be able to search by hashtags with dashes and numbers",
+		Fn:   testSearchHashtagWithDashAndNumbers,
+		Tags: []string{EngineAll},
+	},
+	{
 		Name: "Should not return system messages",
 		Fn:   testSearchShouldExcludeSystemMessages,
 		Tags: []string{EngineAll},
@@ -205,7 +211,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should be able to search in deleted/archived channels",
 		Fn:   testSearchInDeletedOrArchivedChannels,
-		Tags: []string{EngineMySql, EnginePostgres},
+		Tags: []string{EngineMySQL, EnginePostgres},
 	},
 	{
 		Name:        "Should be able to search terms with dashes",
@@ -222,7 +228,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should be able to search terms with underscores",
 		Fn:   testSearchTermsWithUnderscores,
-		Tags: []string{EngineMySql, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EngineElasticSearch},
 	},
 	{
 		Name: "Should be able to search posts made by bot accounts",
@@ -247,7 +253,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should not support slash as character separator",
 		Fn:   testSlashShouldNotBeCharSeparator,
-		Tags: []string{EngineMySql, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EngineElasticSearch},
 	},
 	{
 		Name: "Should be able to search in comments",
@@ -257,7 +263,7 @@ var searchPostStoreTests = []searchTest{
 	{
 		Name: "Should be able to search terms within links",
 		Fn:   testSupportSearchTermsWithinLinks,
-		Tags: []string{EngineMySql, EngineElasticSearch},
+		Tags: []string{EngineMySQL, EngineElasticSearch},
 	},
 	{
 		Name: "Should not return links that are embedded in markdown",
@@ -269,11 +275,17 @@ var searchPostStoreTests = []searchTest{
 		Fn:   testSearchAcrossTeams,
 		Tags: []string{EngineAll},
 	},
+	{
+		Name: "Should be removed from search index when deleted",
+		Fn:   testSearchPostDeleted,
+		Tags: []string{EngineAll},
+	},
 }
 
 func TestSearchPostStore(t *testing.T, s store.Store, testEngine *SearchTestEngine) {
 	th := &SearchTestHelper{
-		Store: s,
+		Context: request.TestContext(t),
+		Store:   s,
 	}
 	err := th.SetupBasicFixtures()
 	require.NoError(t, err)
@@ -283,7 +295,7 @@ func TestSearchPostStore(t *testing.T, s store.Store, testEngine *SearchTestEngi
 }
 
 func testSearchPostsIncludingDMs(t *testing.T, th *SearchTestHelper) {
-	direct, err := th.createDirectChannel(th.Team.Id, "direct", "direct", []*model.User{th.User, th.User2})
+	direct, err := th.createDirectChannel(th.Team.Id, "direct", []*model.User{th.User, th.User2})
 	require.NoError(t, err)
 	defer th.deleteChannel(direct)
 
@@ -296,7 +308,7 @@ func testSearchPostsIncludingDMs(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "test"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -305,7 +317,7 @@ func testSearchPostsIncludingDMs(t *testing.T, th *SearchTestHelper) {
 }
 
 func testSearchPostsWithPagination(t *testing.T, th *SearchTestHelper) {
-	direct, err := th.createDirectChannel(th.Team.Id, "direct", "direct", []*model.User{th.User, th.User2})
+	direct, err := th.createDirectChannel(th.Team.Id, "direct", []*model.User{th.User, th.User2})
 	require.NoError(t, err)
 	defer th.deleteChannel(direct)
 
@@ -318,13 +330,13 @@ func testSearchPostsWithPagination(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "test"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 1)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 1)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
 	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 1, 1)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 1, 1)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -339,7 +351,7 @@ func testSearchReturnPinnedAndUnpinned(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "test"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -347,24 +359,107 @@ func testSearchReturnPinnedAndUnpinned(t *testing.T, th *SearchTestHelper) {
 	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 }
 
-func testSearchExactPhraseInQuotes(t *testing.T, th *SearchTestHelper) {
-	p1, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "channel test 1 2 3", "", model.PostTypeDefault, 0, false)
+func testSearchANDORQuotesCombinations(t *testing.T, th *SearchTestHelper) {
+	p1, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "one two three four", "", model.PostTypeDefault, 0, false)
 	require.NoError(t, err)
-	_, err = th.createPost(th.User.Id, th.ChannelBasic.Id, "channel test 123", "", model.PostTypeDefault, 0, false)
+	p2, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "one two five", "", model.PostTypeDefault, 0, false)
 	require.NoError(t, err)
-	_, err = th.createPost(th.User.Id, th.ChannelBasic.Id, "channel something test 1 2 3", "", model.PostTypeDefault, 0, false)
-	require.NoError(t, err)
-	_, err = th.createPost(th.User.Id, th.ChannelBasic.Id, "channel 1 2 3", "", model.PostTypeDefault, 0, false)
+	p3, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "one five six", "", model.PostTypeDefault, 0, false)
 	require.NoError(t, err)
 
 	defer th.deleteUserPosts(th.User.Id)
 
-	params := &model.SearchParams{Terms: "\"channel test 1 2 3\""}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
-	require.NoError(t, err)
+	testCases := []struct {
+		name        string
+		terms       string
+		orTerms     bool
+		expectedLen int
+		expectedIDs []string
+	}{
+		{
+			name:        "AND operator, No Quotes, Matches 1",
+			terms:       `two four`,
+			orTerms:     false,
+			expectedLen: 1,
+			expectedIDs: []string{p1.Id},
+		},
+		{
+			name:        "AND operator, No Quotes, Matches 0",
+			terms:       `two six`,
+			orTerms:     false,
+			expectedLen: 0,
+			expectedIDs: []string{},
+		},
+		{
+			name:        "AND operator, With Full Quotes, Matches 0",
+			terms:       `"two four"`,
+			orTerms:     false,
+			expectedLen: 0,
+			expectedIDs: []string{},
+		},
+		{
+			name:        "AND operator, With Full Quotes, Matches 1",
+			terms:       `"two three four"`,
+			orTerms:     false,
+			expectedLen: 1,
+			expectedIDs: []string{p1.Id},
+		},
+		{
+			name:        "AND operator, With Part Quotes, Matches 1",
+			terms:       `two "three four"`,
+			orTerms:     false,
+			expectedLen: 1,
+			expectedIDs: []string{p1.Id},
+		},
+		{
+			name:        "OR operator, No Quotes, Matches 2",
+			terms:       `two four`,
+			orTerms:     true,
+			expectedLen: 2,
+			expectedIDs: []string{p1.Id, p2.Id},
+		},
+		{
+			name:        "OR operator, No Quotes, Matches 3",
+			terms:       `two six`,
+			orTerms:     true,
+			expectedLen: 3,
+			expectedIDs: []string{p1.Id, p2.Id, p3.Id},
+		},
+		{
+			name:        "OR operator, With Full Quotes, Matches 0",
+			terms:       `"two four"`,
+			orTerms:     true,
+			expectedLen: 0,
+			expectedIDs: []string{},
+		},
+		{
+			name:        "OR operator, With Full Quotes, Matches 1",
+			terms:       `"two three four"`,
+			orTerms:     true,
+			expectedLen: 1,
+			expectedIDs: []string{p1.Id},
+		},
+		{
+			name:        "OR operator, With Part Quotes, Matches 2",
+			terms:       `two "three four"`,
+			orTerms:     true,
+			expectedLen: 2,
+			expectedIDs: []string{p1.Id, p2.Id},
+		},
+	}
 
-	require.Len(t, results.Posts, 1)
-	th.checkPostInSearchResults(t, p1.Id, results.Posts)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := &model.SearchParams{Terms: tc.terms, OrTerms: tc.orTerms}
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			require.NoError(t, err)
+
+			require.Len(t, results.Posts, tc.expectedLen)
+			for _, id := range tc.expectedIDs {
+				th.checkPostInSearchResults(t, id, results.Posts)
+			}
+		})
+	}
 }
 
 func testSearchEmailAddresses(t *testing.T, th *SearchTestHelper) {
@@ -376,7 +471,7 @@ func testSearchEmailAddresses(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search email addresses enclosed by quotes", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "\"test@test.com\""}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -385,7 +480,7 @@ func testSearchEmailAddresses(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search email addresses without quotes", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "test@test.com"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -401,7 +496,7 @@ func testSearchEmailAddressesWithQuotes(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "\"test@test.com\""}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -415,7 +510,7 @@ func testSearchMarkdownUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search the start inside the markdown underscore", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "start"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -424,7 +519,7 @@ func testSearchMarkdownUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search a word in the middle of the markdown underscore", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "middle"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -433,7 +528,7 @@ func testSearchMarkdownUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search in the end of the markdown underscore", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "end"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -442,7 +537,7 @@ func testSearchMarkdownUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should search inside markdown underscore", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "another"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -460,7 +555,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 
 		t.Run("Should search one word", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "你"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -468,7 +563,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search two words", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "你好"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -476,7 +571,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search with wildcard", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "你*"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 2)
@@ -491,7 +586,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 
 		t.Run("Should search one word", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "слово"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -499,7 +594,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search using wildcard", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "слов*"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -516,7 +611,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 
 		t.Run("Should search one word", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "本"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 2)
@@ -525,7 +620,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search two words", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "本木"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -533,7 +628,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search with wildcard", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "本*"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 2)
@@ -551,7 +646,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 
 		t.Run("Should search one word", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "불"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -559,7 +654,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search two words", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "불다"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 1)
@@ -567,7 +662,7 @@ func testSearchNonLatinWords(t *testing.T, th *SearchTestHelper) {
 		})
 		t.Run("Should search with wildcard", func(t *testing.T) {
 			params := &model.SearchParams{Terms: "불*"}
-			results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+			results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 			require.NoError(t, err)
 
 			require.Len(t, results.Posts, 2)
@@ -585,7 +680,7 @@ func testSearchAlternativeSpellings(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "Straße"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -593,7 +688,7 @@ func testSearchAlternativeSpellings(t *testing.T, th *SearchTestHelper) {
 	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 
 	params = &model.SearchParams{Terms: "Strasse"}
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -609,7 +704,7 @@ func testSearchAlternativeSpellingsAccents(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "café"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -617,7 +712,7 @@ func testSearchAlternativeSpellingsAccents(t *testing.T, th *SearchTestHelper) {
 	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 
 	params = &model.SearchParams{Terms: "café"}
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -625,7 +720,7 @@ func testSearchAlternativeSpellingsAccents(t *testing.T, th *SearchTestHelper) {
 	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 
 	params = &model.SearchParams{Terms: "cafe"}
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 0)
@@ -643,7 +738,7 @@ func testSearchOrExcludePostsBySpecificUser(t *testing.T, th *SearchTestHelper) 
 		Terms:     "fromuser",
 		FromUsers: []string{th.User.Id},
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -662,7 +757,7 @@ func testSearchOrExcludePostsInChannel(t *testing.T, th *SearchTestHelper) {
 		Terms:      "fromuser",
 		InChannels: []string{th.ChannelBasic.Id},
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -670,7 +765,7 @@ func testSearchOrExcludePostsInChannel(t *testing.T, th *SearchTestHelper) {
 }
 
 func testSearchOrExcludePostsInDMGM(t *testing.T, th *SearchTestHelper) {
-	direct, err := th.createDirectChannel(th.Team.Id, "direct", "direct", []*model.User{th.User, th.User2})
+	direct, err := th.createDirectChannel(th.Team.Id, "direct", []*model.User{th.User, th.User2})
 	require.NoError(t, err)
 	defer th.deleteChannel(direct)
 
@@ -690,7 +785,7 @@ func testSearchOrExcludePostsInDMGM(t *testing.T, th *SearchTestHelper) {
 			Terms:      "fromuser",
 			InChannels: []string{direct.Id, group.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -703,7 +798,7 @@ func testSearchOrExcludePostsInDMGM(t *testing.T, th *SearchTestHelper) {
 			Terms:      "fromuser",
 			InChannels: []string{direct.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -715,7 +810,7 @@ func testSearchOrExcludePostsInDMGM(t *testing.T, th *SearchTestHelper) {
 			Terms:      "fromuser",
 			InChannels: []string{group.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -740,7 +835,7 @@ func testFilterMessagesInSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:  "test",
 			OnDate: "2020-03-22",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -751,7 +846,7 @@ func testFilterMessagesInSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:        "test",
 			ExcludedDate: "2020-03-22",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -777,7 +872,7 @@ func testFilterMessagesBeforeSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:      "test",
 			BeforeDate: "2020-03-23",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -790,7 +885,7 @@ func testFilterMessagesBeforeSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:              "test",
 			ExcludedBeforeDate: "2020-03-23",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -815,7 +910,7 @@ func testFilterMessagesAfterSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:     "test",
 			AfterDate: "2020-03-23",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -827,7 +922,7 @@ func testFilterMessagesAfterSpecificDate(t *testing.T, th *SearchTestHelper) {
 			Terms:             "test",
 			ExcludedAfterDate: "2020-03-23",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -850,7 +945,7 @@ func testFilterMessagesWithATerm(t *testing.T, th *SearchTestHelper) {
 			Terms:         "one",
 			ExcludedTerms: "five eight",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -862,7 +957,7 @@ func testFilterMessagesWithATerm(t *testing.T, th *SearchTestHelper) {
 			Terms:         "one",
 			ExcludedTerms: "\"eight nine\"",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -885,7 +980,7 @@ func testSearchUsingBooleanOperators(t *testing.T, th *SearchTestHelper) {
 			Terms:   "one two",
 			OrTerms: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -898,7 +993,7 @@ func testSearchUsingBooleanOperators(t *testing.T, th *SearchTestHelper) {
 			Terms:   "one two",
 			OrTerms: false,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -925,7 +1020,7 @@ func testSearchUsingCombinedFilters(t *testing.T, th *SearchTestHelper) {
 			FromUsers:  []string{th.User2.Id},
 			InChannels: []string{th.ChannelPrivate.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -938,7 +1033,7 @@ func testSearchUsingCombinedFilters(t *testing.T, th *SearchTestHelper) {
 			ExcludedUsers: []string{th.User2.Id},
 			InChannels:    []string{th.ChannelPrivate.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -952,7 +1047,7 @@ func testSearchUsingCombinedFilters(t *testing.T, th *SearchTestHelper) {
 			ExcludedAfterDate:  "2020-03-11",
 			InChannels:         []string{th.ChannelPrivate.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -964,7 +1059,7 @@ func testSearchUsingCombinedFilters(t *testing.T, th *SearchTestHelper) {
 			AfterDate:        "2020-03-11",
 			ExcludedChannels: []string{th.ChannelPrivate.Id},
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -987,7 +1082,7 @@ func testSearchIgnoringStopWords(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "the search",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -998,7 +1093,7 @@ func testSearchIgnoringStopWords(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "a avoid",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1009,7 +1104,7 @@ func testSearchIgnoringStopWords(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "in where you",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1042,7 +1137,7 @@ func testSupportStemming(t *testing.T, th *SearchTestHelper) {
 	params := &model.SearchParams{
 		Terms: "search",
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -1063,7 +1158,7 @@ func testSupportWildcards(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "search*",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1075,7 +1170,7 @@ func testSupportWildcards(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "sear* post",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1095,7 +1190,7 @@ func testNotSupportPrecedingWildcards(t *testing.T, th *SearchTestHelper) {
 	params := &model.SearchParams{
 		Terms: "*earch",
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 0)
@@ -1111,7 +1206,7 @@ func testSearchDiscardWildcardAlone(t *testing.T, th *SearchTestHelper) {
 	params := &model.SearchParams{
 		Terms: "qwerty *",
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1129,7 +1224,7 @@ func testSupportTermsWithDash(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "term-with-dash",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1140,7 +1235,7 @@ func testSupportTermsWithDash(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "\"term-with-dash\"",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1159,7 +1254,7 @@ func testSupportTermsWithUnderscore(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "term_with_underscore",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1170,7 +1265,7 @@ func testSupportTermsWithUnderscore(t *testing.T, th *SearchTestHelper) {
 		params := &model.SearchParams{
 			Terms: "\"term_with_underscore\"",
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1192,7 +1287,7 @@ func testSearchOrExcludePostsWithHashtags(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#hashtag",
 			IsHashtag: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1205,7 +1300,7 @@ func testSearchOrExcludePostsWithHashtags(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#hashtag",
 			IsHashtag: false,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1231,7 +1326,7 @@ func testSearchHashtagWithMarkdown(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#hashtag",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 5)
@@ -1254,7 +1349,7 @@ func testSearchWithMultipleHashtags(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#hashone #hashtwo",
 			IsHashtag: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1267,7 +1362,7 @@ func testSearchWithMultipleHashtags(t *testing.T, th *SearchTestHelper) {
 			IsHashtag: true,
 			OrTerms:   true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1285,7 +1380,7 @@ func testSearchPostsWithDotsInHashtags(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#hashtag.dot",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1306,7 +1401,7 @@ func testSearchHashtagCaseInsensitive(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#hashtag",
 			IsHashtag: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1320,7 +1415,7 @@ func testSearchHashtagCaseInsensitive(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#HASHTAG",
 			IsHashtag: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1334,7 +1429,7 @@ func testSearchHashtagCaseInsensitive(t *testing.T, th *SearchTestHelper) {
 			Terms:     "#HaShTaG",
 			IsHashtag: true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1355,7 +1450,7 @@ func testSearchHashtagWithDash(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#hashtag-test",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1373,7 +1468,7 @@ func testSearchHashtagWithNumbers(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#h4sht4g",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1391,7 +1486,7 @@ func testSearchHashtagWithDots(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#hashtag.test",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1409,11 +1504,34 @@ func testSearchHashtagWithUnderscores(t *testing.T, th *SearchTestHelper) {
 		Terms:     "#hashtag_test",
 		IsHashtag: true,
 	}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
 	th.checkPostInSearchResults(t, p1.Id, results.Posts)
+}
+
+func testSearchHashtagWithDashAndNumbers(t *testing.T, th *SearchTestHelper) {
+	p1, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "searching hashtag #hashtag-1-finals23", "#hashtag-1-finals23", model.PostTypeDefault, 0, false)
+	require.NoError(t, err)
+
+	p2, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "searching hashtag #hashtag-1-finals23", "#hashtag-1-finals23", model.PostTypeDefault, 0, false)
+	require.NoError(t, err)
+
+	_, err = th.createPost(th.User.Id, th.ChannelBasic.Id, "searching hashtag #hashtag-finals20", "#hashtag-finals20", model.PostTypeDefault, 0, false)
+	require.NoError(t, err)
+	defer th.deleteUserPosts(th.User.Id)
+
+	params := &model.SearchParams{
+		Terms:     "#hashtag-1-finals23",
+		IsHashtag: true,
+	}
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	require.NoError(t, err)
+
+	require.Len(t, results.Posts, 2)
+	th.checkPostInSearchResults(t, p1.Id, results.Posts)
+	th.checkPostInSearchResults(t, p2.Id, results.Posts)
 }
 
 func testSearchShouldExcludeSystemMessages(t *testing.T, th *SearchTestHelper) {
@@ -1432,7 +1550,7 @@ func testSearchShouldExcludeSystemMessages(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "test system"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 0)
@@ -1448,7 +1566,7 @@ func testSearchShouldBeAbleToMatchByMentions(t *testing.T, th *SearchTestHelper)
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "@testuser"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 3)
@@ -1468,7 +1586,7 @@ func testSearchInDeletedOrArchivedChannels(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Doesn't include posts in deleted channels", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "message", IncludeDeletedChannels: false}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1478,7 +1596,7 @@ func testSearchInDeletedOrArchivedChannels(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Include posts in deleted channels", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "message", IncludeDeletedChannels: true}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1489,7 +1607,7 @@ func testSearchInDeletedOrArchivedChannels(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Include posts in deleted channels using multiple terms", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "message channel", IncludeDeletedChannels: true}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1504,7 +1622,7 @@ func testSearchInDeletedOrArchivedChannels(t *testing.T, th *SearchTestHelper) {
 			IncludeDeletedChannels: true,
 			OrTerms:                true,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1522,7 +1640,7 @@ func testSearchInDeletedOrArchivedChannels(t *testing.T, th *SearchTestHelper) {
 			Terms:                  "#hashtag",
 			IncludeDeletedChannels: false,
 		}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params1, params2}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params1, params2}, th.User.Id, th.Team.Id, 0, 20)
 		require.Nil(t, results)
 		require.Error(t, err)
 	})
@@ -1537,7 +1655,7 @@ func testSearchTermsWithDashes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with dash", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with-dash-term"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1546,7 +1664,7 @@ func testSearchTermsWithDashes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with quoted dash", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "\"with-dash-term\""}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1555,7 +1673,7 @@ func testSearchTermsWithDashes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple terms with one having dash", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with-dash-term message"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1564,7 +1682,7 @@ func testSearchTermsWithDashes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple OR terms with one having dash", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with-dash-term message", OrTerms: true}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1582,7 +1700,7 @@ func testSearchTermsWithDots(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with dots", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with.dots.term"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1591,7 +1709,7 @@ func testSearchTermsWithDots(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with quoted dots", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "\"with.dots.term\""}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1600,7 +1718,7 @@ func testSearchTermsWithDots(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple terms with one having dots", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with.dots.term message"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1609,7 +1727,7 @@ func testSearchTermsWithDots(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple OR terms with one having dots", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with.dots.term message", OrTerms: true}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1627,7 +1745,7 @@ func testSearchTermsWithUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with underscores", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with_underscores_term"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1636,7 +1754,7 @@ func testSearchTermsWithUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for terms with quoted underscores", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "\"with_underscores_term\""}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1645,7 +1763,7 @@ func testSearchTermsWithUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple terms with one having underscores", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with_underscores_term message"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1654,7 +1772,7 @@ func testSearchTermsWithUnderscores(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Search for multiple OR terms with one having underscores", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "with_underscores_term message", OrTerms: true}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1676,7 +1794,7 @@ func testSearchBotAccountsPosts(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(bot.UserId)
 
 	params := &model.SearchParams{Terms: "bot"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
@@ -1695,7 +1813,7 @@ func testSupportStemmingAndWildcards(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should stem appr", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "appr*"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 3)
@@ -1706,7 +1824,7 @@ func testSupportStemmingAndWildcards(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should stem approve", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "approve*"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
@@ -1723,7 +1841,7 @@ func testSupportWildcardOutsideQuotes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should return results without quotes", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "hell*"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 2)
@@ -1733,13 +1851,12 @@ func testSupportWildcardOutsideQuotes(t *testing.T, th *SearchTestHelper) {
 
 	t.Run("Should return just one result with quotes", func(t *testing.T) {
 		params := &model.SearchParams{Terms: "\"hell\"*"}
-		results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 		require.NoError(t, err)
 
 		require.Len(t, results.Posts, 1)
 		th.checkPostInSearchResults(t, p2.Id, results.Posts)
 	})
-
 }
 
 func testHashtagSearchShouldSupportThreeOrMoreCharacters(t *testing.T, th *SearchTestHelper) {
@@ -1752,7 +1869,7 @@ func testHashtagSearchShouldSupportThreeOrMoreCharacters(t *testing.T, th *Searc
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "#123", IsHashtag: true}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1765,21 +1882,21 @@ func testSlashShouldNotBeCharSeparator(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "gamma"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
 	th.checkPostInSearchResults(t, p1.Id, results.Posts)
 
 	params = &model.SearchParams{Terms: "beta"}
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
 	th.checkPostInSearchResults(t, p1.Id, results.Posts)
 
 	params = &model.SearchParams{Terms: "alpha"}
-	results, err = th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err = th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1794,7 +1911,7 @@ func testSupportSearchInComments(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "reply"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1807,7 +1924,7 @@ func testSupportSearchTermsWithinLinks(t *testing.T, th *SearchTestHelper) {
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "wikipedia"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 1)
@@ -1820,7 +1937,7 @@ func testShouldNotReturnLinksEmbeddedInMarkdown(t *testing.T, th *SearchTestHelp
 	defer th.deleteUserPosts(th.User.Id)
 
 	params := &model.SearchParams{Terms: "wikipedia"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 0)
@@ -1829,7 +1946,7 @@ func testShouldNotReturnLinksEmbeddedInMarkdown(t *testing.T, th *SearchTestHelp
 func testSearchAcrossTeams(t *testing.T, th *SearchTestHelper) {
 	err := th.addUserToChannels(th.User, []string{th.ChannelAnotherTeam.Id})
 	require.NoError(t, err)
-	defer th.Store.Channel().RemoveMember(th.ChannelAnotherTeam.Id, th.User.Id)
+	defer th.Store.Channel().RemoveMember(th.Context, th.ChannelAnotherTeam.Id, th.User.Id)
 
 	_, err = th.createPost(th.User.Id, th.ChannelAnotherTeam.Id, "text to search", "", model.PostTypeDefault, 0, false)
 	require.NoError(t, err)
@@ -1838,8 +1955,36 @@ func testSearchAcrossTeams(t *testing.T, th *SearchTestHelper) {
 	require.NoError(t, err)
 
 	params := &model.SearchParams{Terms: "search"}
-	results, err := th.Store.Post().SearchPostsForUser([]*model.SearchParams{params}, th.User.Id, "", 0, 20)
+	results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, "", 0, 20)
 	require.NoError(t, err)
 
 	require.Len(t, results.Posts, 2)
+}
+
+func testSearchPostDeleted(t *testing.T, th *SearchTestHelper) {
+	t.Run("Search for soft deleted post", func(t *testing.T) {
+		p1, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "message to delete", "", model.PostTypeDefault, 0, false)
+		require.NoError(t, err)
+
+		err = th.Store.Post().Delete(th.Context, p1.Id, p1.UpdateAt, th.User.Id)
+		require.NoError(t, err)
+
+		params := &model.SearchParams{Terms: "message to delete"}
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		require.NoError(t, err)
+		require.Len(t, results.Posts, 0)
+	})
+
+	t.Run("Search for hard deleted post", func(t *testing.T) {
+		p2, err := th.createPost(th.User.Id, th.ChannelBasic.Id, "message to delete", "", model.PostTypeDefault, 0, false)
+		require.NoError(t, err)
+
+		err = th.Store.Post().PermanentDelete(th.Context, p2.Id)
+		require.NoError(t, err)
+
+		params := &model.SearchParams{Terms: "message to delete"}
+		results, err := th.Store.Post().SearchPostsForUser(th.Context, []*model.SearchParams{params}, th.User.Id, th.Team.Id, 0, 20)
+		require.NoError(t, err)
+		require.Len(t, results.Posts, 0)
+	})
 }

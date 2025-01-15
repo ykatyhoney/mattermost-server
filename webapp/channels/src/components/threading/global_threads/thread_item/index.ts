@@ -2,18 +2,19 @@
 // See LICENSE.txt for license information.
 
 import {memo} from 'react';
-import {compose} from 'redux';
 import {connect} from 'react-redux';
+import {compose} from 'redux';
 
-import {getPost, isPostPriorityEnabled, makeGetPostsForThread} from 'mattermost-redux/selectors/entities/posts';
 import {makeGetChannel} from 'mattermost-redux/selectors/entities/channels';
-import {makeGetDisplayName} from 'mattermost-redux/selectors/entities/users';
-import {getThread} from 'mattermost-redux/selectors/entities/threads';
+import {getPost, isPostPriorityEnabled, makeGetPostsForThread} from 'mattermost-redux/selectors/entities/posts';
 import {getCurrentRelativeTeamUrl} from 'mattermost-redux/selectors/entities/teams';
+import {getThread} from 'mattermost-redux/selectors/entities/threads';
+import {makeGetDisplayName} from 'mattermost-redux/selectors/entities/users';
 
-import {GlobalState} from 'types/store';
+import type {GlobalState} from 'types/store';
 
-import ThreadItem, {OwnProps} from './thread_item';
+import ThreadItem from './thread_item';
+import type {OwnProps} from './thread_item';
 
 function makeMapStateToProps() {
     const getPostsForThread = makeGetPostsForThread();
@@ -31,7 +32,7 @@ function makeMapStateToProps() {
 
         return {
             post,
-            channel: getChannel(state, {id: post.channel_id}),
+            channel: getChannel(state, post.channel_id),
             currentRelativeTeamUrl: getCurrentRelativeTeamUrl(state),
             displayName: getDisplayName(state, post.user_id, true),
             postsInThread: getPostsForThread(state, post.id),

@@ -1,12 +1,16 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import {useCallback} from 'react';
 import {useSelector} from 'react-redux';
 
 import {getCloudCustomer, isCurrentLicenseCloud} from 'mattermost-redux/selectors/entities/cloud';
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
-import {buildMMURL, goToMattermostContactSalesForm} from 'utils/contact_support_sales';
+
 import {LicenseLinks} from 'utils/constants';
+import {buildMMURL, goToMattermostContactSalesForm} from 'utils/contact_support_sales';
+
+const utmSource = 'mattermost';
 
 export default function useOpenSalesLink(): [() => void, string] {
     const isCloud = useSelector(isCurrentLicenseCloud);
@@ -16,7 +20,6 @@ export default function useOpenSalesLink(): [() => void, string] {
     let firstName = '';
     let lastName = '';
     let companyName = '';
-    const utmSource = 'mattermost';
     let utmMedium = 'in-product';
 
     if (isCloud && customer) {
@@ -30,8 +33,9 @@ export default function useOpenSalesLink(): [() => void, string] {
     }
 
     const contactSalesLink = buildMMURL(LicenseLinks.CONTACT_SALES, firstName, lastName, companyName, customerEmail, utmSource, utmMedium);
-    const goToSalesLinkFunc = () => {
+    const goToSalesLinkFunc = useCallback(() => {
         goToMattermostContactSalesForm(firstName, lastName, companyName, customerEmail, utmSource, utmMedium);
-    };
+    }, [firstName, lastName, companyName, customerEmail, utmMedium]);
+
     return [goToSalesLinkFunc, contactSalesLink];
 }

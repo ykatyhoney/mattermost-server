@@ -5,15 +5,16 @@ package platform
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces/mocks"
-	smocks "github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	smocks "github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/einterfaces/mocks"
 )
 
 func TestConfigListener(t *testing.T) {
@@ -60,7 +61,7 @@ func TestConfigSave(t *testing.T) {
 	t.Run("trigger a config changed event for the cluster", func(t *testing.T) {
 		oldCfg := th.Service.Config()
 		newCfg := oldCfg.Clone()
-		newCfg.ServiceSettings.SiteURL = model.NewString("http://newhost.me")
+		newCfg.ServiceSettings.SiteURL = model.NewPointer("http://newhost.me")
 
 		sanitizedOldCfg := th.Service.configStore.RemoveEnvironmentOverrides(oldCfg)
 		sanitizedNewCfg := th.Service.configStore.RemoveEnvironmentOverrides(newCfg)
@@ -78,7 +79,7 @@ func TestConfigSave(t *testing.T) {
 		defer th.TearDown()
 
 		metricsMock := &mocks.MetricsInterface{}
-		metricsMock.On("IncrementWebsocketEvent", mock.AnythingOfType("string")).Return()
+		metricsMock.On("IncrementWebsocketEvent", model.WebsocketEventConfigChanged).Return()
 		metricsMock.On("IncrementWebSocketBroadcastBufferSize", mock.AnythingOfType("string"), mock.AnythingOfType("float64")).Return()
 		metricsMock.On("DecrementWebSocketBroadcastBufferSize", mock.AnythingOfType("string"), mock.AnythingOfType("float64")).Return()
 		metricsMock.On("Register").Return()
@@ -86,17 +87,20 @@ func TestConfigSave(t *testing.T) {
 
 		// Change a random config setting
 		cfg := th.Service.Config().Clone()
-		cfg.ThemeSettings.EnableThemeSelection = model.NewBool(!*cfg.ThemeSettings.EnableThemeSelection)
-		th.Service.SaveConfig(cfg, false)
+		cfg.ThemeSettings.EnableThemeSelection = model.NewPointer(!*cfg.ThemeSettings.EnableThemeSelection)
+		_, _, appErr := th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 		metricsMock.AssertNumberOfCalls(t, "Register", 0)
 
 		// Disable metrics
-		cfg.MetricsSettings.Enable = model.NewBool(false)
-		th.Service.SaveConfig(cfg, false)
+		cfg.MetricsSettings.Enable = model.NewPointer(false)
+		_, _, appErr = th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 
 		// Change the metrics setting
-		cfg.MetricsSettings.Enable = model.NewBool(true)
-		th.Service.SaveConfig(cfg, false)
+		cfg.MetricsSettings.Enable = model.NewPointer(true)
+		_, _, appErr = th.Service.SaveConfig(cfg, false)
+		require.Nil(t, appErr)
 		metricsMock.AssertNumberOfCalls(t, "Register", 1)
 	})
 }
@@ -109,38 +113,84 @@ func TestIsFirstUserAccount(t *testing.T) {
 	storeMock.On("User").Return(userStoreMock)
 
 	type test struct {
-		name   string
-		count  int64
-		err    error
-		result bool
+		name            string
+		count           int64
+		err             error
+		result          bool
+		shouldCallStore bool
 	}
 
 	tests := []test{
-		{"success no users", 0, nil, true},
-		{"success one user", 1, nil, false},
-		{"success multiple users", 42, nil, false},
-		{"success negative users", -100, nil, true},
-		{"failed request", 0, errors.New("error"), false},
+		{"failed request", 0, errors.New("error"), false, true},
+		{"success negative users", -100, nil, true, true},
+		{"success no users", 0, nil, true, true},
+		{"success one user", 1, nil, false, true},
+		{"success multiple users - no store call", 42, nil, false, false},
+	}
+
+	// create a session, this should not affect IsFirstUserAccount
+	err := th.Service.sessionCache.SetWithDefaultExpiry("mock_session", 1)
+	require.NoError(t, err)
+
+	for _, te := range tests {
+		t.Run(te.name, func(t *testing.T) {
+			*userStoreMock = smocks.UserStore{}
+
+			if te.shouldCallStore {
+				userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Return(te.count, te.err).Once()
+			} else {
+				userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Unset()
+			}
+
+			require.Equal(t, te.result, th.Service.IsFirstUserAccount())
+		})
+	}
+}
+
+func TestIsFirstUserAccountThunderingHerd(t *testing.T) {
+	th := SetupWithStoreMock(t)
+	defer th.TearDown()
+	storeMock := th.Service.Store.(*smocks.Store)
+	userStoreMock := &smocks.UserStore{}
+	storeMock.On("User").Return(userStoreMock)
+
+	tests := []struct {
+		name               string
+		count              int64
+		err                error
+		concurrentRequest  int
+		result             bool
+		numberOfStoreCalls int
+	}{
+		{"failed request", 0, errors.New("error"), 10, false, 10},
+		{"success negative users", -100, nil, 10, true, 10},
+		{"success no users", 0, nil, 10, true, 10},
+		{"success one user - lot of requests", 1, nil, 1000, false, 1},
+		{"success multiple users - no store call", 42, nil, 10, false, 0},
 	}
 
 	for _, te := range tests {
 		t.Run(te.name, func(t *testing.T) {
 			*userStoreMock = smocks.UserStore{}
 
-			userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Return(te.count, te.err)
-			require.Equal(t, te.result, th.Service.IsFirstUserAccount())
-		})
-	}
+			if te.numberOfStoreCalls != 0 {
+				userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Return(te.count, te.err).Times(te.numberOfStoreCalls)
+			} else {
+				userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Unset()
+			}
+			defer userStoreMock.AssertExpectations(t)
 
-	// create a session, this should not affect IsFirstUserAccount
-	th.Service.sessionCache.Set("mock_session", 1)
+			var wg sync.WaitGroup
+			for i := 0; i < te.concurrentRequest; i++ {
+				wg.Add(1)
 
-	for _, te := range tests {
-		t.Run(te.name+" with session", func(t *testing.T) {
-			*userStoreMock = smocks.UserStore{}
+				go func() {
+					defer wg.Done()
+					require.Equal(t, te.result, th.Service.IsFirstUserAccount())
+				}()
+			}
 
-			userStoreMock.On("Count", model.UserCountOptions{IncludeDeleted: true}).Return(te.count, te.err)
-			require.Equal(t, te.result, th.Service.IsFirstUserAccount())
+			wg.Wait()
 		})
 	}
 }

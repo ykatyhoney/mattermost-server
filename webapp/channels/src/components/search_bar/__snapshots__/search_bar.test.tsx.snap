@@ -10,7 +10,7 @@ exports[`components/search_bar/SearchBar should match snapshot with search 1`] =
       aria-labelledby="searchBox"
       autocomplete="off"
       class="search__form"
-      role="application"
+      role="search"
       style="overflow: visible;"
     >
       <div
@@ -28,7 +28,9 @@ exports[`components/search_bar/SearchBar should match snapshot with search 1`] =
           class="sr-only"
           role="alert"
         />
-        <div>
+        <div
+          class="input-wrapper"
+        >
           <input
             aria-describedby="searchbar-help-popup"
             aria-label="Search"
@@ -41,8 +43,9 @@ exports[`components/search_bar/SearchBar should match snapshot with search 1`] =
             type="search"
             value="test"
           />
-          <div
+          <button
             class="input-clear visible"
+            data-testid="input-clear"
           >
             <span
               aria-hidden="true"
@@ -52,7 +55,7 @@ exports[`components/search_bar/SearchBar should match snapshot with search 1`] =
                 class="icon icon-close-circle"
               />
             </span>
-          </div>
+          </button>
         </div>
       </div>
     </form>
@@ -70,7 +73,7 @@ exports[`components/search_bar/SearchBar should match snapshot with search, with
       aria-labelledby="searchBox"
       autocomplete="off"
       class="search__form"
-      role="application"
+      role="search"
       style="overflow: visible;"
     >
       <div
@@ -96,7 +99,9 @@ exports[`components/search_bar/SearchBar should match snapshot with search, with
           class="sr-only"
           role="alert"
         />
-        <div>
+        <div
+          class="input-wrapper"
+        >
           <input
             aria-describedby="searchbar-help-popup"
             aria-label="Search"
@@ -109,8 +114,9 @@ exports[`components/search_bar/SearchBar should match snapshot with search, with
             type="search"
             value="test"
           />
-          <div
+          <button
             class="input-clear visible"
+            data-testid="input-clear"
           >
             <span
               aria-hidden="true"
@@ -120,7 +126,7 @@ exports[`components/search_bar/SearchBar should match snapshot with search, with
                 class="icon icon-close-circle"
               />
             </span>
-          </div>
+          </button>
         </div>
       </div>
     </form>
@@ -138,7 +144,7 @@ exports[`components/search_bar/SearchBar should match snapshot without search 1`
       aria-labelledby="searchBox"
       autocomplete="off"
       class="search__form"
-      role="application"
+      role="search"
       style="overflow: visible;"
     >
       <div
@@ -156,7 +162,9 @@ exports[`components/search_bar/SearchBar should match snapshot without search 1`
           class="sr-only"
           role="alert"
         />
-        <div>
+        <div
+          class="input-wrapper"
+        >
           <input
             aria-describedby="searchbar-help-popup"
             aria-label="Search"
@@ -187,7 +195,7 @@ exports[`components/search_bar/SearchBar should match snapshot without search, w
       aria-labelledby="searchBox"
       autocomplete="off"
       class="search__form"
-      role="application"
+      role="search"
       style="overflow: visible;"
     >
       <div
@@ -213,7 +221,9 @@ exports[`components/search_bar/SearchBar should match snapshot without search, w
           class="sr-only"
           role="alert"
         />
-        <div>
+        <div
+          class="input-wrapper"
+        >
           <input
             aria-describedby="searchbar-help-popup"
             aria-label="Search"
@@ -244,7 +254,7 @@ exports[`components/search_bar/SearchBar should match snapshot without search, w
       aria-labelledby="searchBox"
       autocomplete="off"
       class="search__form"
-      role="application"
+      role="search"
       style="overflow: visible;"
     >
       <div
@@ -262,7 +272,9 @@ exports[`components/search_bar/SearchBar should match snapshot without search, w
           class="sr-only"
           role="alert"
         />
-        <div>
+        <div
+          class="input-wrapper"
+        >
           <input
             aria-describedby="searchbar-help-popup"
             aria-label="Search"

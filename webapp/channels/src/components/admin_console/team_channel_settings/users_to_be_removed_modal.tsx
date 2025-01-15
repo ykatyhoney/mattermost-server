@@ -2,12 +2,10 @@
 // See LICENSE.txt for license information.
 
 import React, {useCallback, useState} from 'react';
-import {FormattedMessage} from 'react-intl';
 import {Modal} from 'react-bootstrap';
+import {FormattedMessage} from 'react-intl';
 
-import {UserProfile} from '@mattermost/types/users';
-
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
+import type {UserProfile} from '@mattermost/types/users';
 
 import GroupsUsers from './group/group_users';
 
@@ -44,10 +42,13 @@ const UsersToBeRemovedModal = ({total, scope, scopeId, users, onExited}: Props) 
     const handleHide = useCallback(() => setShow(false), []);
 
     const title = (
-        <FormattedMarkdownMessage
-            id='admin.team_channel_settings.usersToBeRemovedModal.title'
-            defaultMessage='**{total, number} {total, plural, one {User} other {Users}}** To Be Removed'
-            values={{total}}
+        <FormattedMessage
+            id='admin.teamChannelSettings.usersToBeRemovedModal.title'
+            defaultMessage='<b>{total, number} {total, plural, one {User} other {Users}}</b> To Be Removed'
+            values={{
+                total,
+                b: (chunks: string) => <b>{chunks}</b>,
+            }}
         />
     );
 
@@ -81,7 +82,7 @@ const UsersToBeRemovedModal = ({total, scope, scopeId, users, onExited}: Props) 
             onHide={handleHide}
             onExited={onExited}
             id='confirmModal'
-            role='dialog'
+            role='none'
             aria-labelledby='confirmModalLabel'
         >
             <Modal.Header closeButton={true}>

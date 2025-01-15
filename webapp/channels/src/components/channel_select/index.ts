@@ -3,13 +3,12 @@
 
 import {connect} from 'react-redux';
 
-import {createSelector} from 'reselect';
+import type {GlobalState} from '@mattermost/types/store';
 
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {getMyChannels} from 'mattermost-redux/selectors/entities/channels';
 import {getCurrentUserLocale} from 'mattermost-redux/selectors/entities/i18n';
 import {sortChannelsByTypeAndDisplayName} from 'mattermost-redux/utils/channel_utils';
-
-import {GlobalState} from '@mattermost/types/store';
 
 import ChannelSelect from './channel_select';
 
@@ -18,7 +17,8 @@ const getMyChannelsSorted = createSelector(
     getMyChannels,
     getCurrentUserLocale,
     (channels, locale) => {
-        return [...channels].sort(sortChannelsByTypeAndDisplayName.bind(null, locale));
+        const activeChannels = channels.filter((channel) => channel.delete_at === 0);
+        return [...activeChannels].sort(sortChannelsByTypeAndDisplayName.bind(null, locale));
     },
 );
 

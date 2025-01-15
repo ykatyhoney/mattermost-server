@@ -1,32 +1,30 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ChangeEvent, FormEvent} from 'react';
-import {Link} from 'react-router-dom';
+import React from 'react';
+import type {ChangeEvent, FormEvent} from 'react';
 import {FormattedMessage} from 'react-intl';
+import {Link} from 'react-router-dom';
 
-import * as FileUtils from 'utils/file_utils';
+import type {Bot, BotPatch} from '@mattermost/types/bots';
+import type {Team} from '@mattermost/types/teams';
+import type {UserAccessToken, UserProfile} from '@mattermost/types/users';
 
-import * as UserUtils from 'mattermost-redux/utils/user_utils';
 import {General} from 'mattermost-redux/constants';
-
-import BotDefaultIcon from 'images/bot_default_icon.png';
+import type {ActionResult} from 'mattermost-redux/types/actions';
+import * as UserUtils from 'mattermost-redux/utils/user_utils';
 
 import BackstageHeader from 'components/backstage/components/backstage_header';
-import OverlayTrigger from 'components/overlay_trigger';
-import Tooltip from 'components/tooltip';
-import SpinnerButton from 'components/spinner_button';
-import FormError from 'components/form_error';
-
-import {getHistory} from 'utils/browser_history';
-import {AcceptedProfileImageTypes, Constants, ValidationErrors} from 'utils/constants';
-import * as Utils from 'utils/utils';
-
-import {Team} from '@mattermost/types/teams';
-import {Bot, BotPatch} from '@mattermost/types/bots';
-import {UserProfile} from '@mattermost/types/users';
-import {ActionResult} from 'mattermost-redux/types/actions';
 import ExternalLink from 'components/external_link';
+import FormError from 'components/form_error';
+import SpinnerButton from 'components/spinner_button';
+import WithTooltip from 'components/with_tooltip';
+
+import BotDefaultIcon from 'images/bot_default_icon.png';
+import {getHistory} from 'utils/browser_history';
+import {AcceptedProfileImageTypes, Constants, DeveloperLinks, ValidationErrors} from 'utils/constants';
+import * as FileUtils from 'utils/file_utils';
+import * as Utils from 'utils/utils';
 
 const roleOptionSystemAdmin = 'System Admin';
 const roleOptionMember = 'Member';
@@ -71,32 +69,32 @@ export type Props = {
         /**
          * Creates a new bot account.
          */
-        createBot: (bot: Partial<Bot>) => ActionResult;
+        createBot: (bot: Partial<Bot>) => Promise<ActionResult<Bot>>;
 
         /**
          * Patches an existing bot account.
          */
-        patchBot: (botUserId: string, botPatch: Partial<BotPatch>) => ActionResult;
+        patchBot: (botUserId: string, botPatch: Partial<BotPatch>) => Promise<ActionResult<Bot>>;
 
         /**
          * Uploads a user profile image
          */
-        uploadProfileImage: (userId: string, image: File | string) => ActionResult;
+        uploadProfileImage: (userId: string, image: File | string) => Promise<ActionResult>;
 
         /**
          * Set profile image to default
          */
-        setDefaultProfileImage: (userId: string) => ActionResult;
+        setDefaultProfileImage: (userId: string) => Promise<ActionResult>;
 
         /**
          * For creating default access token
          */
-        createUserAccessToken: (userId: string, description: string) => ActionResult;
+        createUserAccessToken: (userId: string, description: string) => Promise<ActionResult<UserAccessToken>>;
 
         /**
          * For creating setting bot to system admin or special posting permissions
          */
-        updateUserRoles: (userId: string, roles: string) => ActionResult;
+        updateUserRoles: (userId: string, roles: string) => Promise<ActionResult>;
     };
 };
 
@@ -110,7 +108,7 @@ export type State = {
     error: JSX.Element | string;
     adding: boolean;
     image: string;
-    orientationStyles: {transform: string; transformOrigin: string};
+    orientationStyles: { transform: string; transformOrigin: string };
     pictureFile: File | null | string;
 };
 
@@ -282,7 +280,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                 data = result.data;
                 error = result.error;
             } else {
-                error = Utils.localizeMessage('bot.edit_failed', 'Failed to edit bot');
+                error = Utils.localizeMessage({id: 'bot.edit_failed', defaultMessage: 'Failed to edit bot'});
             }
 
             if (!error && data) {
@@ -322,7 +320,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                         error: (
                             <FormattedMessage
                                 id='bots.manage.add.invalid_username'
-                                defaultMessage='Usernames must begin with a lowercase letter and be 3-22 characters long. You can use lowercase letters, numbers, periods, dashes, and underscores.'
+                                defaultMessage='Usernames have to begin with a lowercase letter and be 3-22 characters long. You can use lowercase letters, numbers, periods, dashes, and underscores.'
                             />
                         ),
                     };
@@ -336,7 +334,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                 data = result.data;
                 error = result.error;
             } else {
-                error = Utils.localizeMessage('bot.create_failed', 'Failed to create bot');
+                error = Utils.localizeMessage({id: 'bot.create_failed', defaultMessage: 'Failed to create bot'});
             }
 
             let token = '';
@@ -347,7 +345,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                     await this.props.actions.setDefaultProfileImage(data.user_id);
                 }
                 const tokenResult = await this.props.actions.createUserAccessToken(data.user_id,
-                    Utils.localizeMessage('bot.token.default.description', 'Default Token'),
+                    Utils.localizeMessage({id: 'bot.token.default.description', defaultMessage: 'Default Token'}),
                 );
 
                 // On error just skip the confirmation because we have a bot without a token.
@@ -356,7 +354,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                     return;
                 }
 
-                token = tokenResult.data.token;
+                token = tokenResult.data!.token!;
             }
 
             if (!error && data) {
@@ -383,7 +381,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
     render() {
         let subtitle = (
             <FormattedMessage
-                id='bots.manage.add'
+                id='bots.manage.add.add'
                 defaultMessage='Add'
             />
         );
@@ -424,17 +422,13 @@ export default class AddBot extends React.PureComponent<Props, State> {
 
         let imageURL = '';
         let removeImageIcon: JSX.Element | null = (
-            <OverlayTrigger
-                delayShow={Constants.OVERLAY_TIME_DELAY}
-                placement='right'
-                overlay={(
-                    <Tooltip id='removeIcon'>
-                        <FormattedMessage
-                            id='bot.remove_profile_picture'
-                            defaultMessage='Remove Bot Icon'
-                        />
-                    </Tooltip>
-                )}
+            <WithTooltip
+                title={
+                    <FormattedMessage
+                        id='bot.remove_profile_picture'
+                        defaultMessage='Remove Bot Icon'
+                    />
+                }
             >
                 <a
                     className={'bot-profile__remove'}
@@ -442,7 +436,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                 >
                     <span>{'×'}</span>
                 </a>
-            </OverlayTrigger>
+            </WithTooltip>
         );
         let imageStyles;
         if (this.props.bot && !this.state.pictureFile) {
@@ -523,13 +517,14 @@ export default class AddBot extends React.PureComponent<Props, State> {
                                     {removeImageIcon}
                                 </div>
                                 <div
-                                    className='btn btn-sm btn-primary btn-file sel-btn'
+                                    className='btn btn-primary btn-file'
                                 >
                                     <FormattedMessage
                                         id='bots.image.upload'
                                         defaultMessage='Upload Image'
                                     />
                                     <input
+                                        className='btn-file__input'
                                         accept={Constants.ACCEPT_STATIC_IMAGE}
                                         type='file'
                                         onChange={this.updatePicture}
@@ -611,12 +606,12 @@ export default class AddBot extends React.PureComponent<Props, State> {
                                     <option
                                         value={roleOptionMember}
                                     >
-                                        {Utils.localizeMessage('bot.add.role.member', 'Member')}
+                                        {Utils.localizeMessage({id: 'bot.add.role.member', defaultMessage: 'Member'})}
                                     </option>
                                     <option
                                         value={roleOptionSystemAdmin}
                                     >
-                                        {Utils.localizeMessage('bot.add.role.admin', 'System Admin')}
+                                        {Utils.localizeMessage({id: 'bot.add.role.admin', defaultMessage: 'System Admin'})}
                                     </option>
                                 </select>
                                 <div className='form__help'>
@@ -630,12 +625,12 @@ export default class AddBot extends React.PureComponent<Props, State> {
                         <div className='row bot-profile__section'>
                             <div className='col-md-5 col-sm-8 col-sm-offset-4'>
                                 <FormattedMessage
-                                    id='admin.manage_roles.additionalRoles'
+                                    id='admin.manage_roles.botAdditionalRoles'
                                     defaultMessage='Select additional permissions for the account. <link>Read more about roles and permissions</link>.'
                                     values={{
                                         link: (msg: React.ReactNode) => (
                                             <ExternalLink
-                                                href='https://developers.mattermost.com/integrate/admin-guide/admin-personal-access-token/'
+                                                href={DeveloperLinks.PERSONAL_ACCESS_TOKENS}
                                                 location='add_bot'
                                             >
                                                 {msg}
@@ -719,7 +714,7 @@ export default class AddBot extends React.PureComponent<Props, State> {
                                 errors={[this.state.error]}
                             />
                             <Link
-                                className='btn btn-link btn-sm'
+                                className='btn btn-tertiary'
                                 to={`/${this.props.team.name}/integrations/bots`}
                             >
                                 <FormattedMessage

@@ -2,22 +2,22 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {useDispatch, useSelector} from 'react-redux';
 import {useIntl} from 'react-intl';
-import {Tooltip} from 'react-bootstrap';
+import {useDispatch, useSelector} from 'react-redux';
+
+import type {AppBinding, AppCallResponse} from '@mattermost/types/apps';
 
 import {AppCallResponseTypes} from 'mattermost-redux/constants/apps';
 import {getCurrentChannelId} from 'mattermost-redux/selectors/entities/common';
 import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
-import {AppBinding, AppCallResponse} from '@mattermost/types/apps';
 
 import {handleBindingClick, openAppsModal, postEphemeralCallResponseForContext} from 'actions/apps';
 
-import {createCallContext} from 'utils/apps';
-import Constants from 'utils/constants';
-import {DoAppCallResult} from 'types/apps';
+import WithTooltip from 'components/with_tooltip';
 
-import OverlayTrigger from 'components/overlay_trigger';
+import {createCallContext} from 'utils/apps';
+
+import type {DoAppCallResult} from 'types/apps';
 
 export const isAppBinding = (x: Record<string, any> | undefined): x is AppBinding => {
     return Boolean(x?.app_id);
@@ -82,18 +82,10 @@ const AppBarBinding = (props: BindingComponentProps) => {
     const id = `app-bar-icon-${binding.app_id}`;
     const label = binding.label || binding.app_id;
 
-    const tooltip = (
-        <Tooltip id={'tooltip-' + id}>
-            <span>{label}</span>
-        </Tooltip>
-    );
-
     return (
-        <OverlayTrigger
-            trigger={['hover', 'focus']}
-            delayShow={Constants.OVERLAY_TIME_DELAY}
-            placement='left'
-            overlay={tooltip}
+        <WithTooltip
+            title={label}
+            isVertical={false}
         >
             <div
                 id={id}
@@ -105,7 +97,7 @@ const AppBarBinding = (props: BindingComponentProps) => {
                     <img src={binding.icon}/>
                 </div>
             </div>
-        </OverlayTrigger>
+        </WithTooltip>
     );
 };
 

@@ -1,23 +1,22 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ReactNode} from 'react';
-
-import {ConnectedComponent} from 'react-redux';
-
+import React from 'react';
+import type {ReactNode} from 'react';
+import {FormattedMessage} from 'react-intl';
+import type {ConnectedComponent} from 'react-redux';
 import styled from 'styled-components';
+
+import type {Channel, ChannelMembership} from '@mattermost/types/channels';
+import type {TeamMembership} from '@mattermost/types/teams';
+import type {UserProfile as UserProfileType} from '@mattermost/types/users';
 
 import {Client4} from 'mattermost-redux/client';
 
+import CustomStatusEmoji from 'components/custom_status/custom_status_emoji';
+import Nbsp from 'components/html_entities/nbsp';
 import ProfilePicture from 'components/profile_picture';
 import UserProfile from 'components/user_profile';
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
-import Nbsp from 'components/html_entities/nbsp';
-import CustomStatusEmoji from 'components/custom_status/custom_status_emoji';
-
-import {UserProfile as UserProfileType} from '@mattermost/types/users';
-import {Channel, ChannelMembership} from '@mattermost/types/channels';
-import {TeamMembership} from '@mattermost/types/teams';
 
 import {createSafeId, displayFullAndNicknameForUser} from 'utils/utils';
 
@@ -80,11 +79,12 @@ const UserListRow = ({user, status, extraInfo = [], actions = [], actionProps, a
     let statusProp: string | undefined;
     if (extraInfo && extraInfo.length > 0) {
         emailProp = (
-            <FormattedMarkdownMessage
-                id='admin.user_item.emailTitle'
-                defaultMessage='**Email:** {email}'
+            <FormattedMessage
+                id='admin.user_item.email_title'
+                defaultMessage='<strong>Email:</strong> {email}'
                 values={{
                     email: user.email,
+                    strong: (chunks: React.ReactNode) => <strong>{chunks}</strong>,
                 }}
             />
         );
@@ -117,7 +117,6 @@ const UserListRow = ({user, status, extraInfo = [], actions = [], actionProps, a
                 status={statusProp}
                 size='md'
                 userId={user.id}
-                hasMention={true}
                 username={user.username}
             />
             <div
@@ -131,7 +130,6 @@ const UserListRow = ({user, status, extraInfo = [], actions = [], actionProps, a
                     >
                         <UserProfile
                             userId={user.id}
-                            hasMention={true}
                             displayUsername={true}
                         />
                         {
@@ -153,6 +151,11 @@ const UserListRow = ({user, status, extraInfo = [], actions = [], actionProps, a
                             userID={user.id}
                             emojiSize={16}
                             showTooltip={true}
+                            spanStyle={{
+                                display: 'flex',
+                                flex: '0 0 auto',
+                                alignItems: 'center',
+                            }}
                         />
                     </CustomStatus>
 

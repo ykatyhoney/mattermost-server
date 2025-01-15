@@ -1,21 +1,23 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
+import React, {memo} from 'react';
+import {useIntl} from 'react-intl';
 
-import {localizeMessage} from 'utils/utils';
 import {ChannelHeaderDropdownItems} from 'components/channel_header_dropdown';
 import Menu from 'components/widgets/menu/menu';
 
-export default class ChannelHeaderDropdown extends React.PureComponent {
-    render() {
-        return (
-            <Menu
-                id='channelHeaderDropdownMenu'
-                ariaLabel={localizeMessage('channel_header.menuAriaLabel', 'Channel Menu').toLowerCase()}
-            >
-                <ChannelHeaderDropdownItems isMobile={false}/>
-            </Menu>
-        );
-    }
-}
+const ChannelHeaderDropdown = () => {
+    const intl = useIntl();
+
+    return (
+        <Menu
+            id='channelHeaderDropdownMenu'
+            ariaLabel={intl.formatMessage({id: 'channel_header.menuAriaLabel', defaultMessage: 'Channel Menu'}).toLowerCase()}
+        >
+            <ChannelHeaderDropdownItems isMobile={false}/>
+        </Menu>
+    );
+};
+
+export default memo(ChannelHeaderDropdown);

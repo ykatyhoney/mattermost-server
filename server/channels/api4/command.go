@@ -9,24 +9,24 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/audit"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/audit"
 )
 
 func (api *API) InitCommand() {
-	api.BaseRoutes.Commands.Handle("", api.APISessionRequired(createCommand)).Methods("POST")
-	api.BaseRoutes.Commands.Handle("", api.APISessionRequired(listCommands)).Methods("GET")
-	api.BaseRoutes.Commands.Handle("/execute", api.APISessionRequired(executeCommand)).Methods("POST")
+	api.BaseRoutes.Commands.Handle("", api.APISessionRequired(createCommand)).Methods(http.MethodPost)
+	api.BaseRoutes.Commands.Handle("", api.APISessionRequired(listCommands)).Methods(http.MethodGet)
+	api.BaseRoutes.Commands.Handle("/execute", api.APISessionRequired(executeCommand)).Methods(http.MethodPost)
 
-	api.BaseRoutes.Command.Handle("", api.APISessionRequired(getCommand)).Methods("GET")
-	api.BaseRoutes.Command.Handle("", api.APISessionRequired(updateCommand)).Methods("PUT")
-	api.BaseRoutes.Command.Handle("/move", api.APISessionRequired(moveCommand)).Methods("PUT")
-	api.BaseRoutes.Command.Handle("", api.APISessionRequired(deleteCommand)).Methods("DELETE")
+	api.BaseRoutes.Command.Handle("", api.APISessionRequired(getCommand)).Methods(http.MethodGet)
+	api.BaseRoutes.Command.Handle("", api.APISessionRequired(updateCommand)).Methods(http.MethodPut)
+	api.BaseRoutes.Command.Handle("/move", api.APISessionRequired(moveCommand)).Methods(http.MethodPut)
+	api.BaseRoutes.Command.Handle("", api.APISessionRequired(deleteCommand)).Methods(http.MethodDelete)
 
-	api.BaseRoutes.Team.Handle("/commands/autocomplete", api.APISessionRequired(listAutocompleteCommands)).Methods("GET")
-	api.BaseRoutes.Team.Handle("/commands/autocomplete_suggestions", api.APISessionRequired(listCommandAutocompleteSuggestions)).Methods("GET")
-	api.BaseRoutes.Command.Handle("/regen_token", api.APISessionRequired(regenCommandToken)).Methods("PUT")
+	api.BaseRoutes.Team.Handle("/commands/autocomplete", api.APISessionRequired(listAutocompleteCommands)).Methods(http.MethodGet)
+	api.BaseRoutes.Team.Handle("/commands/autocomplete_suggestions", api.APISessionRequired(listCommandAutocompleteSuggestions)).Methods(http.MethodGet)
+	api.BaseRoutes.Command.Handle("/regen_token", api.APISessionRequired(regenCommandToken)).Methods(http.MethodPut)
 }
 
 func createCommand(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -323,9 +323,9 @@ func executeCommand(c *Context, w http.ResponseWriter, r *http.Request) {
 	defer c.LogAuditRec(auditRec)
 	audit.AddEventParameterAuditable(auditRec, "command_args", &commandArgs)
 
-	// checks that user is a member of the specified channel, and that they have permission to use slash commands in it
-	if !c.App.SessionHasPermissionToChannel(c.AppContext, *c.AppContext.Session(), commandArgs.ChannelId, model.PermissionUseSlashCommands) {
-		c.SetPermissionError(model.PermissionUseSlashCommands)
+	// Checks that user is a member of the specified channel, and that they have permission to create a post in it.
+	if !c.App.SessionHasPermissionToChannel(c.AppContext, *c.AppContext.Session(), commandArgs.ChannelId, model.PermissionCreatePost) {
+		c.SetPermissionError(model.PermissionCreatePost)
 		return
 	}
 
@@ -343,8 +343,8 @@ func executeCommand(c *Context, w http.ResponseWriter, r *http.Request) {
 		// if the slash command was used in a DM or GM, ensure that the user is a member of the specified team, so that
 		// they can't just execute slash commands against arbitrary teams
 		if c.AppContext.Session().GetTeamByTeamId(commandArgs.TeamId) == nil {
-			if !c.App.SessionHasPermissionTo(*c.AppContext.Session(), model.PermissionUseSlashCommands) {
-				c.SetPermissionError(model.PermissionUseSlashCommands)
+			if !c.App.SessionHasPermissionTo(*c.AppContext.Session(), model.PermissionCreatePost) {
+				c.SetPermissionError(model.PermissionCreatePost)
 				return
 			}
 		}

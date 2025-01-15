@@ -7,12 +7,12 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	graphql "github.com/graph-gophers/graphql-go"
 	_ "github.com/mattermost/go-i18n/i18n"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/web"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/manualtesting"
+	"github.com/mattermost/mattermost/server/v8/channels/web"
 )
 
 type Routes struct {
@@ -50,6 +50,8 @@ type Routes struct {
 	ChannelMembersForUser    *mux.Router // 'api/v4/users/{user_id:[A-Za-z0-9]+}/teams/{team_id:[A-Za-z0-9]+}/channels/members'
 	ChannelModerations       *mux.Router // 'api/v4/channels/{channel_id:[A-Za-z0-9]+}/moderations'
 	ChannelCategories        *mux.Router // 'api/v4/users/{user_id:[A-Za-z0-9]+}/teams/{team_id:[A-Za-z0-9]+}/channels/categories'
+	ChannelBookmarks         *mux.Router // 'api/v4/channels/{channel_id:[A-Za-z0-9]+}/bookmarks'
+	ChannelBookmark          *mux.Router // 'api/v4/channels/{channel_id:[A-Za-z0-9]+}/bookmarks/{bookmark_id:[A-Za-z0-9]+}'
 
 	Posts           *mux.Router // 'api/v4/posts'
 	Post            *mux.Router // 'api/v4/posts/{post_id:[A-Za-z0-9]+}'
@@ -80,8 +82,6 @@ type Routes struct {
 	OAuth     *mux.Router // 'api/v4/oauth'
 	OAuthApps *mux.Router // 'api/v4/oauth/apps'
 	OAuthApp  *mux.Router // 'api/v4/oauth/apps/{app_id:[A-Za-z0-9]+}'
-
-	OpenGraph *mux.Router // 'api/v4/opengraph'
 
 	SAML       *mux.Router // 'api/v4/saml'
 	Compliance *mux.Router // 'api/v4/compliance'
@@ -130,26 +130,36 @@ type Routes struct {
 	Exports *mux.Router // 'api/v4/exports'
 	Export  *mux.Router // 'api/v4/exports/{export_name:.+\\.zip}'
 
-	RemoteCluster  *mux.Router // 'api/v4/remotecluster'
-	SharedChannels *mux.Router // 'api/v4/sharedchannels'
+	RemoteCluster        *mux.Router // 'api/v4/remotecluster'
+	SharedChannels       *mux.Router // 'api/v4/sharedchannels'
+	ChannelForRemote     *mux.Router // 'api/v4/remotecluster/{remote_id:[A-Za-z0-9]+}/channels/{channel_id:[A-Za-z0-9]+}'
+	SharedChannelRemotes *mux.Router // 'api/v4/remotecluster/{remote_id:[A-Za-z0-9]+}/sharedchannelremotes'
 
 	Permissions *mux.Router // 'api/v4/permissions'
 
-	InsightsForTeam *mux.Router // 'api/v4/teams/{team_id:[A-Za-z0-9]+}/top'
-	InsightsForUser *mux.Router // 'api/v4/users/me/top'
-
 	Usage *mux.Router // 'api/v4/usage'
-
-	WorkTemplates *mux.Router // 'api/v4/worktemplates'
 
 	HostedCustomer *mux.Router // 'api/v4/hosted_customer'
 
 	Drafts *mux.Router // 'api/v4/drafts'
+
+	IPFiltering *mux.Router // 'api/v4/ip_filtering'
+
+	Reports *mux.Router // 'api/v4/reports'
+
+	Limits *mux.Router // 'api/v4/limits'
+
+	OutgoingOAuthConnections *mux.Router // 'api/v4/oauth/outgoing_connections'
+	OutgoingOAuthConnection  *mux.Router // 'api/v4/oauth/outgoing_connections/{outgoing_oauth_connection_id:[A-Za-z0-9]+}'
+
+	CustomProfileAttributes       *mux.Router // 'api/v4/custom_profile_attributes'
+	CustomProfileAttributesFields *mux.Router // 'api/v4/custom_profile_attributes/fields'
+	CustomProfileAttributesField  *mux.Router // 'api/v4/custom_profile_attributes/fields/{field_id:[A-Za-z0-9]+}'
+	CustomProfileAttributesValues *mux.Router // 'api/v4/custom_profile_attributes/values'
 }
 
 type API struct {
 	srv        *app.Server
-	schema     *graphql.Schema
 	BaseRoutes *Routes
 }
 
@@ -193,6 +203,8 @@ func Init(srv *app.Server) (*API, error) {
 	api.BaseRoutes.ChannelMembersForUser = api.BaseRoutes.User.PathPrefix("/teams/{team_id:[A-Za-z0-9]+}/channels/members").Subrouter()
 	api.BaseRoutes.ChannelModerations = api.BaseRoutes.Channel.PathPrefix("/moderations").Subrouter()
 	api.BaseRoutes.ChannelCategories = api.BaseRoutes.User.PathPrefix("/teams/{team_id:[A-Za-z0-9]+}/channels/categories").Subrouter()
+	api.BaseRoutes.ChannelBookmarks = api.BaseRoutes.Channel.PathPrefix("/bookmarks").Subrouter()
+	api.BaseRoutes.ChannelBookmark = api.BaseRoutes.ChannelBookmarks.PathPrefix("/{bookmark_id:[A-Za-z0-9]+}").Subrouter()
 
 	api.BaseRoutes.Posts = api.BaseRoutes.APIRoot.PathPrefix("/posts").Subrouter()
 	api.BaseRoutes.Post = api.BaseRoutes.Posts.PathPrefix("/{post_id:[A-Za-z0-9]+}").Subrouter()
@@ -245,8 +257,6 @@ func Init(srv *app.Server) (*API, error) {
 
 	api.BaseRoutes.ReactionByNameForPostForUser = api.BaseRoutes.PostForUser.PathPrefix("/reactions/{emoji_name:[A-Za-z0-9\\_\\-\\+]+}").Subrouter()
 
-	api.BaseRoutes.OpenGraph = api.BaseRoutes.APIRoot.PathPrefix("/opengraph").Subrouter()
-
 	api.BaseRoutes.Roles = api.BaseRoutes.APIRoot.PathPrefix("/roles").Subrouter()
 	api.BaseRoutes.Schemes = api.BaseRoutes.APIRoot.PathPrefix("/schemes").Subrouter()
 
@@ -263,19 +273,30 @@ func Init(srv *app.Server) (*API, error) {
 
 	api.BaseRoutes.RemoteCluster = api.BaseRoutes.APIRoot.PathPrefix("/remotecluster").Subrouter()
 	api.BaseRoutes.SharedChannels = api.BaseRoutes.APIRoot.PathPrefix("/sharedchannels").Subrouter()
+	api.BaseRoutes.SharedChannelRemotes = api.BaseRoutes.RemoteCluster.PathPrefix("/{remote_id:[A-Za-z0-9]+}/sharedchannelremotes").Subrouter()
+	api.BaseRoutes.ChannelForRemote = api.BaseRoutes.RemoteCluster.PathPrefix("/{remote_id:[A-Za-z0-9]+}/channels/{channel_id:[A-Za-z0-9]+}").Subrouter()
 
 	api.BaseRoutes.Permissions = api.BaseRoutes.APIRoot.PathPrefix("/permissions").Subrouter()
 
-	api.BaseRoutes.InsightsForTeam = api.BaseRoutes.Team.PathPrefix("/top").Subrouter()
-	api.BaseRoutes.InsightsForUser = api.BaseRoutes.Users.PathPrefix("/me/top").Subrouter()
-
 	api.BaseRoutes.Usage = api.BaseRoutes.APIRoot.PathPrefix("/usage").Subrouter()
-
-	api.BaseRoutes.WorkTemplates = api.BaseRoutes.APIRoot.PathPrefix("/worktemplates").Subrouter()
 
 	api.BaseRoutes.HostedCustomer = api.BaseRoutes.APIRoot.PathPrefix("/hosted_customer").Subrouter()
 
 	api.BaseRoutes.Drafts = api.BaseRoutes.APIRoot.PathPrefix("/drafts").Subrouter()
+
+	api.BaseRoutes.IPFiltering = api.BaseRoutes.APIRoot.PathPrefix("/ip_filtering").Subrouter()
+
+	api.BaseRoutes.Reports = api.BaseRoutes.APIRoot.PathPrefix("/reports").Subrouter()
+
+	api.BaseRoutes.Limits = api.BaseRoutes.APIRoot.PathPrefix("/limits").Subrouter()
+
+	api.BaseRoutes.OutgoingOAuthConnections = api.BaseRoutes.APIRoot.PathPrefix("/oauth/outgoing_connections").Subrouter()
+	api.BaseRoutes.OutgoingOAuthConnection = api.BaseRoutes.OutgoingOAuthConnections.PathPrefix("/{outgoing_oauth_connection_id:[A-Za-z0-9]+}").Subrouter()
+
+	api.BaseRoutes.CustomProfileAttributes = api.BaseRoutes.APIRoot.PathPrefix("/custom_profile_attributes").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesFields = api.BaseRoutes.CustomProfileAttributes.PathPrefix("/fields").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesField = api.BaseRoutes.CustomProfileAttributesFields.PathPrefix("/{field_id:[A-Za-z0-9]+}").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesValues = api.BaseRoutes.CustomProfileAttributes.PathPrefix("/values").Subrouter()
 
 	api.InitUser()
 	api.InitBot()
@@ -304,7 +325,6 @@ func Init(srv *app.Server) (*API, error) {
 	api.InitEmoji()
 	api.InitOAuth()
 	api.InitReaction()
-	api.InitOpenGraph()
 	api.InitPlugin()
 	api.InitRole()
 	api.InitScheme()
@@ -318,13 +338,21 @@ func Init(srv *app.Server) (*API, error) {
 	api.InitSharedChannels()
 	api.InitPermissions()
 	api.InitExport()
-	api.InitInsights()
 	api.InitUsage()
-	api.InitWorkTemplate()
 	api.InitHostedCustomer()
 	api.InitDrafts()
-	if err := api.InitGraphQL(); err != nil {
-		return nil, err
+	api.InitIPFiltering()
+	api.InitChannelBookmarks()
+	api.InitReports()
+	api.InitLimits()
+	api.InitOutgoingOAuthConnection()
+	api.InitClientPerformanceMetrics()
+	api.InitScheduledPost()
+	api.InitCustomProfileAttributes()
+
+	// If we allow testing then listen for manual testing URL hits
+	if *srv.Config().ServiceSettings.EnableTesting {
+		api.BaseRoutes.Root.Handle("/manualtest", api.APIHandler(manualtesting.ManualTest)).Methods(http.MethodGet)
 	}
 
 	srv.Router.Handle("/api/v4/{anything:.*}", http.HandlerFunc(api.Handle404))
@@ -385,6 +413,7 @@ func InitLocal(srv *app.Server) *API {
 
 	api.BaseRoutes.LDAP = api.BaseRoutes.APIRoot.PathPrefix("/ldap").Subrouter()
 	api.BaseRoutes.System = api.BaseRoutes.APIRoot.PathPrefix("/system").Subrouter()
+	api.BaseRoutes.Preferences = api.BaseRoutes.User.PathPrefix("/preferences").Subrouter()
 	api.BaseRoutes.Posts = api.BaseRoutes.APIRoot.PathPrefix("/posts").Subrouter()
 	api.BaseRoutes.Post = api.BaseRoutes.Posts.PathPrefix("/{post_id:[A-Za-z0-9]+}").Subrouter()
 	api.BaseRoutes.PostsForChannel = api.BaseRoutes.Channel.PathPrefix("/posts").Subrouter()
@@ -402,6 +431,11 @@ func InitLocal(srv *app.Server) *API {
 
 	api.BaseRoutes.SAML = api.BaseRoutes.APIRoot.PathPrefix("/saml").Subrouter()
 
+	api.BaseRoutes.CustomProfileAttributes = api.BaseRoutes.APIRoot.PathPrefix("/custom_profile_attributes").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesFields = api.BaseRoutes.CustomProfileAttributes.PathPrefix("/fields").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesField = api.BaseRoutes.CustomProfileAttributesFields.PathPrefix("/{field_id:[A-Za-z0-9]+}").Subrouter()
+	api.BaseRoutes.CustomProfileAttributesValues = api.BaseRoutes.CustomProfileAttributes.PathPrefix("/values").Subrouter()
+
 	api.InitUserLocal()
 	api.InitTeamLocal()
 	api.InitChannelLocal()
@@ -415,12 +449,14 @@ func InitLocal(srv *app.Server) *API {
 	api.InitLdapLocal()
 	api.InitSystemLocal()
 	api.InitPostLocal()
+	api.InitPreferenceLocal()
 	api.InitRoleLocal()
 	api.InitUploadLocal()
 	api.InitImportLocal()
 	api.InitExportLocal()
 	api.InitJobLocal()
 	api.InitSamlLocal()
+	api.InitCustomProfileAttributesLocal()
 
 	srv.LocalRouter.Handle("/api/v4/{anything:.*}", http.HandlerFunc(api.Handle404))
 

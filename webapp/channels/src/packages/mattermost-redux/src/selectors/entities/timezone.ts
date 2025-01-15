@@ -3,33 +3,31 @@
 
 import timezones from 'timezones.json';
 
-import {GlobalState} from '@mattermost/types/store';
-import {UserProfile} from '@mattermost/types/users';
-import {createSelector} from 'reselect';
+import type {UserProfile} from '@mattermost/types/users';
 
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {getTimezoneLabel, getUserCurrentTimezone} from 'mattermost-redux/utils/timezone_utils';
 
 import {getCurrentUser} from './common';
 
-function getTimezoneForUserProfile(profile: UserProfile) {
-    if (profile && profile.timezone) {
+export const getTimezoneForUserProfile = createSelector(
+    'getTimezoneForUserProfile',
+    (profile: UserProfile) => profile,
+    (profile) => {
+        if (profile && profile.timezone) {
+            return {
+                ...profile.timezone,
+                useAutomaticTimezone: profile.timezone.useAutomaticTimezone === 'true',
+            };
+        }
+
         return {
-            ...profile.timezone,
-            useAutomaticTimezone: profile.timezone.useAutomaticTimezone === 'true',
+            useAutomaticTimezone: true,
+            automaticTimezone: '',
+            manualTimezone: '',
         };
-    }
-
-    return {
-        useAutomaticTimezone: true,
-        automaticTimezone: '',
-        manualTimezone: '',
-    };
-}
-
-export function isTimezoneEnabled(state: GlobalState) {
-    const {config} = state.entities.general;
-    return config.ExperimentalTimezone === 'true';
-}
+    },
+);
 
 export const getCurrentTimezoneFull = createSelector(
     'getCurrentTimezoneFull',
@@ -47,14 +45,16 @@ export const getCurrentTimezone = createSelector(
     },
 );
 
+export function generateCurrentTimezoneLabel(timezone: string) {
+    if (!timezone) {
+        return '';
+    }
+
+    return getTimezoneLabel(timezones, timezone);
+}
+
 export const getCurrentTimezoneLabel = createSelector(
     'getCurrentTimezoneLabel',
     getCurrentTimezone,
-    (timezone) => {
-        if (!timezone) {
-            return '';
-        }
-
-        return getTimezoneLabel(timezones, timezone);
-    },
+    generateCurrentTimezoneLabel,
 );

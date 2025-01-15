@@ -1,14 +1,13 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import * as React from 'react';
+import React, {memo} from 'react';
 import {FormattedMessage} from 'react-intl';
 
-import WomanUpArrowsAndCloudsSvg from 'components/common/svg_images_components/woman_up_arrows_and_clouds_svg';
-import PurchaseLink from 'components/announcement_bar/purchase_link/purchase_link';
 import ContactUsButton from 'components/announcement_bar/contact_sales/contact_us';
+import SetupSystemSvg from 'components/common/svg_images_components/setup_system';
 
-const StarterRightPanel: React.FC = () => {
+const StarterRightPanel = () => {
     const upgradeAdvantages = [
         'OneLogin/ADFS SAML 2.0',
         'OpenID Connect',
@@ -20,9 +19,9 @@ const StarterRightPanel: React.FC = () => {
     return (
         <div className='StarterEditionRightPannel'>
             <div className='svg-image'>
-                <WomanUpArrowsAndCloudsSvg
-                    width={200}
-                    height={200}
+                <SetupSystemSvg
+                    width={197}
+                    height={120}
                 />
             </div>
             <div className='upgrade-title'>
@@ -44,15 +43,6 @@ const StarterRightPanel: React.FC = () => {
                 })}
             </div>
             <div className='purchase_buttons'>
-                <PurchaseLink
-                    eventID='post_trial_purchase_license'
-                    buttonTextElement={
-                        <FormattedMessage
-                            id='admin.license.trialCard.purchase'
-                            defaultMessage='Purchase'
-                        />
-                    }
-                />
                 <ContactUsButton
                     eventID='post_trial_contact_sales'
                 />
@@ -61,4 +51,4 @@ const StarterRightPanel: React.FC = () => {
     );
 };
 
-export default React.memo(StarterRightPanel);
+export default memo(StarterRightPanel);

@@ -13,33 +13,49 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
 	"strconv"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	"github.com/mattermost/mattermost-server/v6/server/channels/product"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/config"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/public/utils"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
 )
 
 // ServiceConfig is used to initialize the PlatformService.
 // The mandatory fields will be checked during the initialization of the service.
 type ServiceConfig struct {
 	// Mandatory fields
-	ConfigStore *config.Store
-	Store       store.Store
+	Store store.Store
 	// Optional fields
 	Cluster einterfaces.ClusterInterface
 }
 
-// ensure the config wrapper implements `product.ConfigService`
-var _ product.ConfigService = (*PlatformService)(nil)
-
 func (ps *PlatformService) Config() *model.Config {
 	return ps.configStore.Get()
+}
+
+// getSanitizedConfig gets the configuration without any secrets.
+func (ps *PlatformService) getSanitizedConfig(rctx request.CTX) *model.Config {
+	cfg := ps.Config().Clone()
+
+	manifests, err := ps.getPluginManifests()
+	if err != nil {
+		// getPluginManifests might error, e.g. when plugins are disabled.
+		// Sanitize all plugin settings in this case.
+		rctx.Logger().Warn("Failed to get plugin manifests for config sanitization. Will sanitize all plugin settings.", mlog.Err(err))
+		cfg.Sanitize(nil)
+	} else {
+		cfg.Sanitize(manifests)
+	}
+
+	return cfg
 }
 
 // Registers a function with a given listener to be called when the config is reloaded and may have changed. The function
@@ -65,9 +81,32 @@ func (ps *PlatformService) UpdateConfig(f func(*model.Config)) {
 	}
 }
 
+// IsConfigReadOnly returns true if the underlying configstore is readonly.
+func (ps *PlatformService) IsConfigReadOnly() bool {
+	return ps.configStore.IsReadOnly()
+}
+
 // SaveConfig replaces the active configuration, optionally notifying cluster peers.
 // It returns both the previous and current configs.
 func (ps *PlatformService) SaveConfig(newCfg *model.Config, sendConfigChangeClusterMessage bool) (*model.Config, *model.Config, *model.AppError) {
+	if ps.pluginEnv != nil {
+		var hookErr error
+		ps.pluginEnv.RunMultiHook(func(hooks plugin.Hooks, _ *model.Manifest) bool {
+			var cfg *model.Config
+			cfg, hookErr = hooks.ConfigurationWillBeSaved(newCfg)
+			if hookErr == nil && cfg != nil {
+				newCfg = cfg
+			}
+			return hookErr == nil
+		}, plugin.ConfigurationWillBeSavedID)
+		if hookErr != nil {
+			if appErr, ok := hookErr.(*model.AppError); ok {
+				return nil, nil, appErr
+			}
+			return nil, nil, model.NewAppError("saveConfig", "app.save_config.plugin_hook_error", nil, "", http.StatusBadRequest).Wrap(hookErr)
+		}
+	}
+
 	oldCfg, newCfg, err := ps.configStore.Set(newCfg)
 	if errors.Is(err, config.ErrReadOnlyConfiguration) {
 		return nil, nil, model.NewAppError("saveConfig", "ent.cluster.save_config.error", nil, "", http.StatusForbidden).Wrap(err)
@@ -93,11 +132,11 @@ func (ps *PlatformService) ReloadConfig() error {
 	return nil
 }
 
-func (ps *PlatformService) GetEnvironmentOverridesWithFilter(filter func(reflect.StructField) bool) map[string]interface{} {
+func (ps *PlatformService) GetEnvironmentOverridesWithFilter(filter func(reflect.StructField) bool) map[string]any {
 	return ps.configStore.GetEnvironmentOverridesWithFilter(filter)
 }
 
-func (ps *PlatformService) GetEnvironmentOverrides() map[string]interface{} {
+func (ps *PlatformService) GetEnvironmentOverrides() map[string]any {
 	return ps.configStore.GetEnvironmentOverrides()
 }
 
@@ -114,15 +153,20 @@ func (ps *PlatformService) ConfigureLogger(name string, logger *mlog.Logger, log
 	// Advanced logging is E20 only, however logging must be initialized before the license
 	// file is loaded.  If no valid E20 license exists then advanced logging will be
 	// shutdown once license is loaded/checked.
+	var resultLevel = mlog.LvlInfo
+	var resultMsg string
 	var err error
-	dsn := *logSettings.AdvancedLoggingConfig
 	var logConfigSrc config.LogConfigSrc
-	if dsn != "" {
+	dsn := logSettings.GetAdvancedLoggingConfig()
+	if !utils.IsEmptyJSON(dsn) {
 		logConfigSrc, err = config.NewLogConfigSrc(dsn, ps.configStore)
 		if err != nil {
 			return fmt.Errorf("invalid config source for %s, %w", name, err)
 		}
-		ps.logger.Info("Loaded configuration for "+name, mlog.String("source", dsn))
+		resultMsg = fmt.Sprintf("Loaded Advanced Logging configuration for %s: %s", name, string(dsn))
+	} else {
+		resultLevel = mlog.LvlDebug
+		resultMsg = fmt.Sprintf("Advanced logging config not provided for %s", name)
 	}
 
 	cfg, err := config.MloggerConfigFromLoggerConfig(logSettings, logConfigSrc, getPath)
@@ -130,9 +174,15 @@ func (ps *PlatformService) ConfigureLogger(name string, logger *mlog.Logger, log
 		return fmt.Errorf("invalid config source for %s, %w", name, err)
 	}
 
+	// this will remove any existing targets and replace with those defined in cfg.
 	if err := logger.ConfigureTargets(cfg, nil); err != nil {
 		return fmt.Errorf("invalid config for %s, %w", name, err)
 	}
+
+	if resultMsg != "" {
+		ps.Log().Log(resultLevel, resultMsg)
+	}
+
 	return nil
 }
 
@@ -192,10 +242,7 @@ func (ps *PlatformService) regenerateClientConfig() {
 
 // AsymmetricSigningKey will return a private key that can be used for asymmetric signing.
 func (ps *PlatformService) AsymmetricSigningKey() *ecdsa.PrivateKey {
-	if key := ps.asymmetricSigningKey.Load(); key != nil {
-		return key.(*ecdsa.PrivateKey)
-	}
-	return nil
+	return ps.asymmetricSigningKey.Load()
 }
 
 // EnsureAsymmetricSigningKey ensures that an asymmetric signing key exists and future calls to
@@ -278,10 +325,7 @@ func (ps *PlatformService) EnsureAsymmetricSigningKey() error {
 
 // LimitedClientConfigWithComputed gets the configuration in a format suitable for sending to the client.
 func (ps *PlatformService) LimitedClientConfigWithComputed() map[string]string {
-	respCfg := map[string]string{}
-	for k, v := range ps.LimitedClientConfig() {
-		respCfg[k] = v
-	}
+	respCfg := maps.Clone(ps.LimitedClientConfig())
 
 	// These properties are not configurable, but nevertheless represent configuration expected
 	// by the client.
@@ -292,10 +336,7 @@ func (ps *PlatformService) LimitedClientConfigWithComputed() map[string]string {
 
 // ClientConfigWithComputed gets the configuration in a format suitable for sending to the client.
 func (ps *PlatformService) ClientConfigWithComputed() map[string]string {
-	respCfg := map[string]string{}
-	for k, v := range ps.clientConfig.Load().(map[string]string) {
-		respCfg[k] = v
-	}
+	respCfg := maps.Clone(ps.ClientConfig())
 
 	// These properties are not configurable, but nevertheless represent configuration expected
 	// by the client.
@@ -311,7 +352,6 @@ func (ps *PlatformService) ClientConfigWithComputed() map[string]string {
 	} else {
 		respCfg["SchemaVersion"] = strconv.Itoa(ver)
 	}
-
 	return respCfg
 }
 
@@ -320,21 +360,34 @@ func (ps *PlatformService) LimitedClientConfig() map[string]string {
 }
 
 func (ps *PlatformService) IsFirstUserAccount() bool {
+	if !ps.isFirstUserAccount.Load() {
+		return false
+	}
+
+	ps.isFirstUserAccountLock.Lock()
+	defer ps.isFirstUserAccountLock.Unlock()
+	// Retry under lock as another call might have already succeeded.
+	if !ps.isFirstUserAccount.Load() {
+		return false
+	}
+
+	ps.logger.Debug("Fetching user count for first user account check")
 	count, err := ps.Store.User().Count(model.UserCountOptions{IncludeDeleted: true})
 	if err != nil {
 		return false
 	}
 
-	return count <= 0
+	// Avoid calling the user count query in future if we get a count > 0
+	if count > 0 {
+		ps.isFirstUserAccount.Store(false)
+		return false
+	}
+
+	return true
 }
 
 func (ps *PlatformService) MaxPostSize() int {
-	maxPostSize := ps.Store.Post().GetMaxPostSize()
-	if maxPostSize == 0 {
-		return model.PostMessageMaxRunesV1
-	}
-
-	return maxPostSize
+	return ps.Store.Post().GetMaxPostSize()
 }
 
 func (ps *PlatformService) isUpgradedFromTE() bool {
@@ -359,5 +412,4 @@ func (ps *PlatformService) GetSystemInstallDate() (int64, *model.AppError) {
 
 func (ps *PlatformService) ClientConfig() map[string]string {
 	return ps.clientConfig.Load().(map[string]string)
-
 }

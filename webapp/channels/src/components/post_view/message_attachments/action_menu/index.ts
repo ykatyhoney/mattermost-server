@@ -1,14 +1,18 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {connect, ConnectedProps} from 'react-redux';
+import {connect} from 'react-redux';
+import type {ConnectedProps} from 'react-redux';
 
-import {PostAction} from '@mattermost/types/integration_actions';
+import type {PostAction} from '@mattermost/types/integration_actions';
 
-import {GlobalState} from 'types/store';
+import {secureGetFromRecord} from 'mattermost-redux/utils/post_utils';
+
 import {autocompleteChannels} from 'actions/channel_actions';
 import {autocompleteUsers} from 'actions/user_actions';
 import {selectAttachmentMenuAction} from 'actions/views/posts';
+
+import type {GlobalState} from 'types/store';
 
 import ActionMenu from './action_menu';
 
@@ -20,7 +24,7 @@ export type OwnProps = {
 
 function mapStateToProps(state: GlobalState, ownProps: OwnProps) {
     const actions = state.views.posts.menuActions[ownProps.postId];
-    const selected = (ownProps.action && ownProps.action.id) ? actions && actions[ownProps.action && ownProps.action.id] : undefined;
+    const selected = (ownProps.action?.id) ? secureGetFromRecord(actions, ownProps.action.id) : undefined;
 
     return {
         selected,

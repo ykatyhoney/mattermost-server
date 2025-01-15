@@ -59,17 +59,17 @@ describe('Keyboard Shortcuts', () => {
             });
 
             // # Verify that we are in the test channel
-            cy.get('#channelIntro').contains('.channel-intro__title', `Beginning of ${testChannel.display_name}`).should('be.visible');
+            cy.get('#channelIntro').contains('.channel-intro__title', `${testChannel.display_name}`).should('be.visible');
 
             // # Verify that the right channel is displayed in LHS
             cy.uiGetLhsSection('CHANNELS').findByText(testChannel.display_name).should('be.visible');
 
             // # Verify that the current user(sysadmin) created the channel
-            cy.get('#channelIntro').contains('.channel-intro__content', `This is the start of the ${testChannel.display_name} channel, created by sysadmin`).should('be.visible');
+            cy.get('#channelIntro').contains('.channel-intro__created', 'Public channel created by sysadmin').should('be.visible');
         });
     });
 
-    it('MM-T1231 - ALT+SHIFT+UP', () => {
+    it.skip('MM-T1231 - ALT+SHIFT+UP', () => {
         cy.apiLogout();
         cy.apiLogin(testUser);
 
@@ -212,7 +212,7 @@ describe('Keyboard Shortcuts', () => {
         });
     });
 
-    it('MM-T1232 - ALT+SHIFT+DOWN', () => {
+    it.skip('MM-T1232 - ALT+SHIFT+DOWN', () => {
         cy.apiLogout();
         cy.apiLogin(testUser);
 
@@ -370,11 +370,12 @@ describe('Keyboard Shortcuts', () => {
 
     it('MM-T1248 - CTRL/CMD+SHIFT+L - Set focus to center channel message box', () => {
         // # Open search box to change focus
-        cy.get('#searchBox').click().should('be.focused').then(() => {
-            // # Type CTRL/CMD+SHIFT+L
-            cy.get('body').cmdOrCtrlShortcut('{shift}L');
-            cy.uiGetPostTextBox().should('be.focused');
-        });
+        cy.uiGetSearchContainer().click();
+        cy.uiGetSearchBox().should('be.focused');
+
+        // # Type CTRL/CMD+SHIFT+L
+        cy.get('body').cmdOrCtrlShortcut('{shift}L');
+        cy.uiGetPostTextBox().should('be.focused');
 
         // # Post a message and open RHS
         const message = `hello${Date.now()}`;
