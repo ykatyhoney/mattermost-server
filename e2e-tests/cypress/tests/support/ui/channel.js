@@ -9,9 +9,9 @@ Cypress.Commands.add('uiCreateChannel', ({
     isPrivate = false,
     purpose = '',
     name = '',
-    createBoard = false,
+    createBoard = '',
 }) => {
-    cy.uiBrowseOrCreateChannel('Create new channel').click();
+    cy.uiBrowseOrCreateChannel('Create new channel');
 
     cy.get('#new-channel-modal').should('be.visible');
     if (isPrivate) {
@@ -30,8 +30,8 @@ Cypress.Commands.add('uiCreateChannel', ({
         cy.findByTestId('add-board-to-channel-check').then((el) => {
             if (el && !el.hasClass('checked')) {
                 el.click();
-                cy.get('#input_select-board-template').should('be.visible').click();
-                cy.get('.SelectTemplateMenu .MenuItem:contains(Roadmap) button').should('be.visible').click();
+                cy.get('.templates-selector').find('input').click({force: true});
+                cy.findByText(createBoard).scrollIntoView().should('be.visible').click({force: true});
             }
         });
     }

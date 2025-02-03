@@ -13,13 +13,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/searchlayer"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/sqlstore"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/services/searchengine"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/store/searchlayer"
+	"github.com/mattermost/mattermost/server/v8/channels/store/sqlstore"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
+	"github.com/mattermost/mattermost/server/v8/platform/services/searchengine"
 )
 
 type MainHelper struct {
@@ -28,6 +30,7 @@ type MainHelper struct {
 	SearchEngine     *searchengine.Broker
 	SQLStore         *sqlstore.SqlStore
 	ClusterInterface *FakeClusterInterface
+	Logger           *mlog.Logger
 
 	status           int
 	testResourcePath string
@@ -41,6 +44,11 @@ type HelperOptions struct {
 }
 
 func NewMainHelper() *MainHelper {
+	// Ignore any globally defined datasource if a test dsn defined
+	if os.Getenv("TEST_DATABASE_MYSQL_DSN") != "" || os.Getenv("TEST_DATABASE_POSTGRESQL_DSN") != "" {
+		os.Unsetenv("MM_SQLSETTINGS_DATASOURCE")
+	}
+
 	return NewMainHelperWithOptions(&HelperOptions{
 		EnableStore:     true,
 		EnableResources: true,
@@ -48,10 +56,33 @@ func NewMainHelper() *MainHelper {
 }
 
 func NewMainHelperWithOptions(options *HelperOptions) *MainHelper {
-	var mainHelper MainHelper
+	// Ignore any globally defined datasource if a test dsn defined
+	if os.Getenv("TEST_DATABASE_MYSQL_DSN") != "" || os.Getenv("TEST_DATABASE_POSTGRESQL_DSN") != "" {
+		os.Unsetenv("MM_SQLSETTINGS_DATASOURCE")
+	}
+
+	// Unset environment variables commonly set for development that interfere with tests.
+	os.Unsetenv("MM_SERVICESETTINGS_SITEURL")
+	os.Unsetenv("MM_SERVICESETTINGS_LISTENADDRESS")
+	os.Unsetenv("MM_SERVICESETTINGS_CONNECTIONSECURITY")
+	os.Unsetenv("MM_SERVICESETTINGS_ENABLEDEVELOPER")
+
+	logger := mlog.CreateConsoleLogger()
+
+	mainHelper := MainHelper{
+		Logger: logger,
+	}
+
+	_, err := mlog.NewLogger()
+	if err != nil {
+		log.Fatal(err)
+	}
 	flag.Parse()
 
-	utils.TranslationsPreInit()
+	err = utils.TranslationsPreInit()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if options != nil {
 		if options.EnableStore && !testing.Short() {
@@ -67,6 +98,13 @@ func NewMainHelperWithOptions(options *HelperOptions) *MainHelper {
 }
 
 func (h *MainHelper) Main(m *testing.M) {
+	defer func() {
+		err := h.Logger.Shutdown()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	if h.testResourcePath != "" {
 		prevDir, err := os.Getwd()
 		if err != nil {
@@ -103,7 +141,12 @@ func (h *MainHelper) setupStore(withReadReplica bool) {
 
 	h.SearchEngine = searchengine.NewBroker(config)
 	h.ClusterInterface = &FakeClusterInterface{}
-	h.SQLStore = sqlstore.New(*h.Settings, nil)
+
+	var err error
+	h.SQLStore, err = sqlstore.New(*h.Settings, h.Logger, nil)
+	if err != nil {
+		panic(err)
+	}
 	h.Store = searchlayer.NewSearchLayer(&TestStore{
 		h.SQLStore,
 	}, h.SearchEngine, config)
@@ -115,7 +158,12 @@ func (h *MainHelper) ToggleReplicasOff() {
 	}
 	h.Settings.DataSourceReplicas = []string{}
 	lic := h.SQLStore.GetLicense()
-	h.SQLStore = sqlstore.New(*h.Settings, nil)
+
+	var err error
+	h.SQLStore, err = sqlstore.New(*h.Settings, h.Logger, nil)
+	if err != nil {
+		panic(err)
+	}
 	h.SQLStore.UpdateLicense(lic)
 }
 
@@ -125,7 +173,13 @@ func (h *MainHelper) ToggleReplicasOn() {
 	}
 	h.Settings.DataSourceReplicas = h.replicas
 	lic := h.SQLStore.GetLicense()
-	h.SQLStore = sqlstore.New(*h.Settings, nil)
+
+	var err error
+	h.SQLStore, err = sqlstore.New(*h.Settings, h.Logger, nil)
+	if err != nil {
+		panic(err)
+	}
+
 	h.SQLStore.UpdateLicense(lic)
 }
 
@@ -153,26 +207,22 @@ func (h *MainHelper) setupResources() {
 func (h *MainHelper) PreloadMigrations() {
 	var buf []byte
 	var err error
-	basePath := os.Getenv("MM_SERVER_PATH")
-	if basePath == "" {
-		basePath = "mattermost-server/server"
-	}
-	relPath := "channels/testlib/testdata"
+
 	switch *h.Settings.DriverName {
 	case model.DatabaseDriverPostgres:
-		finalPath := filepath.Join(basePath, relPath, "postgres_migration_warmup.sql")
+		finalPath := filepath.Join(server.GetPackagePath(), "channels", "testlib", "testdata", "postgres_migration_warmup.sql")
 		buf, err = os.ReadFile(finalPath)
 		if err != nil {
 			panic(fmt.Errorf("cannot read file: %v", err))
 		}
 	case model.DatabaseDriverMysql:
-		finalPath := filepath.Join(basePath, relPath, "mysql_migration_warmup.sql")
+		finalPath := filepath.Join(server.GetPackagePath(), "channels", "testlib", "testdata", "mysql_migration_warmup.sql")
 		buf, err = os.ReadFile(finalPath)
 		if err != nil {
 			panic(fmt.Errorf("cannot read file: %v", err))
 		}
 	}
-	handle := h.SQLStore.GetMasterX()
+	handle := h.SQLStore.GetMaster()
 	_, err = handle.Exec(string(buf))
 	if err != nil {
 		panic(errors.Wrap(err, "Error preloading migrations. Check if you have &multiStatements=true in your DSN if you are using MySQL. Or perhaps the schema changed? If yes, then update the warmup files accordingly"))
@@ -264,7 +314,7 @@ func (h *MainHelper) SetReplicationLagForTesting(seconds int) error {
 
 func (h *MainHelper) execOnEachReplica(query string, args ...any) error {
 	for _, replica := range h.SQLStore.ReplicaXs {
-		_, err := replica.Exec(query, args...)
+		_, err := replica.Load().Exec(query, args...)
 		if err != nil {
 			return err
 		}

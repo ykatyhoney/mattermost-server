@@ -3,24 +3,12 @@
 
 /* eslint-disable max-lines */
 
+import type {Store} from 'redux';
+
 import {Constants} from 'utils/constants';
 
 import {
     AppsTypes,
-    AppCallRequest,
-    AppBinding,
-    AppCall,
-    AppField,
-    DoAppCallResult,
-    AppLookupResponse,
-    AppContext,
-    AppForm,
-    AppCallValues,
-    AppSelectOption,
-    AutocompleteSuggestion,
-    AutocompleteStaticSelect,
-    Channel,
-    Store,
 
     AppBindingLocations,
     AppCallResponseTypes,
@@ -52,11 +40,26 @@ import {
     getChannelSuggestions,
     getUserSuggestions,
     inTextMentionSuggestions,
-    ExtendedAutocompleteSuggestion,
     getAppCommandForm,
     getAppRHSCommandForm,
     makeRHSAppBindingSelector,
 } from './app_command_parser_dependencies';
+import type {
+    AppCallRequest,
+    AppBinding,
+    AppCall,
+    AppField,
+    DoAppCallResult,
+    AppLookupResponse,
+    AppContext,
+    AppForm,
+    AppCallValues,
+    AppSelectOption,
+    AutocompleteSuggestion,
+    AutocompleteStaticSelect,
+    Channel,
+    ExtendedAutocompleteSuggestion,
+    intlShim} from './app_command_parser_dependencies';
 
 export enum ParseState {
     Start = 'Start',
@@ -93,9 +96,7 @@ interface FormsCache {
     getSubmittableForm: (location: string, binding: AppBinding) => Promise<{form?: AppForm; error?: string} | undefined>;
 }
 
-interface Intl {
-    formatMessage(config: {id: string; defaultMessage: string}, values?: {[name: string]: any}): string;
-}
+type Intl = typeof intlShim;
 
 const getCommandBindings = makeAppBindingsSelector(AppBindingLocations.COMMAND);
 const getRHSCommandBindings = makeRHSAppBindingSelector(AppBindingLocations.COMMAND);
@@ -541,7 +542,7 @@ export class ParsedCommand {
                     if (this.incompleteStart === this.i - 1) {
                         return this.asError(this.intl.formatMessage({
                             id: 'apps.error.parser.empty_value',
-                            defaultMessage: 'Empty values are not allowed.',
+                            defaultMessage: 'Empty values are not allowed',
                         }));
                     }
                     this.i++;
@@ -581,7 +582,7 @@ export class ParsedCommand {
                     if (this.incompleteStart === this.i - 1) {
                         return this.asError(this.intl.formatMessage({
                             id: 'apps.error.parser.empty_value',
-                            defaultMessage: 'Empty values are not allowed.',
+                            defaultMessage: 'Empty values are not allowed',
                         }));
                     }
                     this.i++;
@@ -730,7 +731,7 @@ export class ParsedCommand {
                     if (this.incompleteStart === this.i - 1) {
                         return this.asError(this.intl.formatMessage({
                             id: 'apps.error.parser.empty_value',
-                            defaultMessage: 'empty values are not allowed',
+                            defaultMessage: 'Empty values are not allowed',
                         }));
                     }
                     this.i++;
@@ -770,7 +771,7 @@ export class ParsedCommand {
                     if (this.incompleteStart === this.i - 1) {
                         return this.asError(this.intl.formatMessage({
                             id: 'apps.error.parser.empty_value',
-                            defaultMessage: 'empty values are not allowed',
+                            defaultMessage: 'Empty values are not allowed',
                         }));
                     }
                     this.i++;
@@ -989,7 +990,7 @@ export class AppCommandParser {
                             // Silently fail on default value
                             break;
                         }
-                        user = dispatchResult.data;
+                        user = dispatchResult.data!;
                     }
                     parsed.values[f.name] = user.username;
                     break;
@@ -1003,7 +1004,7 @@ export class AppCommandParser {
                             // Silently fail on default value
                             break;
                         }
-                        channel = dispatchResult.data;
+                        channel = dispatchResult.data!;
                     }
                     parsed.values[f.name] = channel.name;
                     break;
@@ -1327,7 +1328,11 @@ export class AppCommandParser {
                 const getChannel = async (channelName: string) => {
                     let channel = selectChannelByName(this.store.getState(), channelName);
                     if (!channel) {
-                        const dispatchResult = await this.store.dispatch(getChannelByNameAndTeamName(getCurrentTeam(this.store.getState()).name, channelName) as any);
+                        const team = getCurrentTeam(this.store.getState());
+                        if (!team) {
+                            return null;
+                        }
+                        const dispatchResult = await this.store.dispatch(getChannelByNameAndTeamName(team.name, channelName) as any);
                         if ('error' in dispatchResult) {
                             return null;
                         }
@@ -1446,7 +1451,7 @@ export class AppCommandParser {
     };
 
     // getChannel gets the channel in which the user is typing the command
-    private getChannel = (): Channel | null => {
+    private getChannel = (): Channel | undefined => {
         const state = this.store.getState();
         return selectChannel(state, this.channelID);
     };
@@ -1506,7 +1511,7 @@ export class AppCommandParser {
             const errorResponse = res.error;
             return {error: errorResponse.text || this.intl.formatMessage({
                 id: 'apps.error.unknown',
-                defaultMessage: 'Unknown error.',
+                defaultMessage: 'Unknown error occurred.',
             })};
         }
 
@@ -1822,7 +1827,7 @@ export class AppCommandParser {
             const errorResponse = res.error;
             return this.makeDynamicSelectSuggestionError(errorResponse.text || this.intl.formatMessage({
                 id: 'apps.error.unknown',
-                defaultMessage: 'Unknown error.',
+                defaultMessage: 'Unknown error occurred.',
             }));
         }
 

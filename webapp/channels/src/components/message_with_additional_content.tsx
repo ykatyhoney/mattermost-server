@@ -3,14 +3,14 @@
 
 import React from 'react';
 
+import type {Post} from '@mattermost/types/posts';
+
 import {Posts} from 'mattermost-redux/constants';
 
 import PostBodyAdditionalContent from 'components/post_view/post_body_additional_content';
 import PostMessageView from 'components/post_view/post_message_view';
 
-import {PluginsState} from 'types/store/plugins';
-
-import {Post} from '@mattermost/types/posts';
+import type {PluginsState} from 'types/store/plugins';
 
 type Props = {
     id?: string;
@@ -22,7 +22,7 @@ type Props = {
 }
 
 export default function MessageWithAdditionalContent({post, isEmbedVisible, pluginPostTypes, isRHS, compactDisplay}: Props) {
-    const hasPlugin = post.type && pluginPostTypes?.hasOwnProperty(post.type);
+    const hasPlugin = post.type && pluginPostTypes && Object.hasOwn(pluginPostTypes, post.type);
     let msg;
     const messageWrapper = (
         <PostMessageView

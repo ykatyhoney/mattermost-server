@@ -1,31 +1,33 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
-import Scrollbars from 'react-custom-scrollbars';
-import {FormattedMessage} from 'react-intl';
 import classNames from 'classnames';
-import {DragDropContext, Droppable, DroppableProvided, DropResult} from 'react-beautiful-dnd';
-import {RouteComponentProps} from 'react-router-dom';
+import React from 'react';
+import {DragDropContext, Droppable} from 'react-beautiful-dnd';
+import type {DroppableProvided, DropResult} from 'react-beautiful-dnd';
+import Scrollbars from 'react-custom-scrollbars';
+import {injectIntl, FormattedMessage} from 'react-intl';
+import type {WrappedComponentProps} from 'react-intl';
+import type {RouteComponentProps} from 'react-router-dom';
 
-import {Team} from '@mattermost/types/teams';
+import type {Team} from '@mattermost/types/teams';
 
 import Permissions from 'mattermost-redux/constants/permissions';
 
-import {Constants} from 'utils/constants';
-import * as Keyboard from 'utils/keyboard';
-import {filterAndSortTeamsByDisplayName} from 'utils/team_utils';
-import * as Utils from 'utils/utils';
-
-import Pluggable from 'plugins/pluggable';
-
-import {getCurrentProduct} from 'utils/products';
 import SystemPermissionGate from 'components/permissions_gates/system_permission_gate';
 import TeamButton from 'components/team_sidebar/components/team_button';
 
+import WebSocketClient from 'client/web_websocket_client';
+import Pluggable from 'plugins/pluggable';
+import {Constants} from 'utils/constants';
+import * as Keyboard from 'utils/keyboard';
+import {getCurrentProduct} from 'utils/products';
+import {filterAndSortTeamsByDisplayName} from 'utils/team_utils';
+import * as Utils from 'utils/utils';
+
 import type {PropsFromRedux} from './index';
 
-export interface Props extends PropsFromRedux {
+export interface Props extends PropsFromRedux, WrappedComponentProps {
     location: RouteComponentProps['location'];
 }
 
@@ -61,7 +63,7 @@ export function renderThumbVertical(props: Props) {
     );
 }
 
-export default class TeamSidebar extends React.PureComponent<Props, State> {
+export class TeamSidebar extends React.PureComponent<Props, State> {
     constructor(props: Props) {
         super(props);
 
@@ -146,6 +148,13 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
         }
     };
 
+    componentDidUpdate(prevProps: Props) {
+        // TODO: debounce
+        if (prevProps.currentTeamId !== this.props.currentTeamId && this.props.enableWebSocketEventScope) {
+            WebSocketClient.updateActiveTeam(this.props.currentTeamId);
+        }
+    }
+
     componentDidMount() {
         this.props.actions.getTeams(0, 200);
         document.addEventListener('keydown', this.handleKeyDown);
@@ -194,6 +203,7 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
     };
 
     render() {
+        const {intl} = this.props;
         const root: Element | null = document.querySelector('#root');
         if (this.props.myTeams.length <= 1) {
             root!.classList.remove('multi-teams');
@@ -238,7 +248,7 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
             <i
                 className='icon icon-plus'
                 role={'img'}
-                aria-label={Utils.localizeMessage('sidebar.team_menu.button.plusIcon', 'Plus Icon')}
+                aria-label={intl.formatMessage({id: 'sidebar.team_menu.button.plusIcon', defaultMessage: 'Plus Icon'})}
             />
         );
 
@@ -256,6 +266,10 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
                     }
                     content={plusIcon}
                     switchTeam={this.props.actions.switchTeam}
+                    displayName={intl.formatMessage({
+                        id: 'team_sidebar.join',
+                        defaultMessage: 'Other teams you can join',
+                    })}
                 />,
             );
         } else {
@@ -275,6 +289,10 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
                         }
                         content={plusIcon}
                         switchTeam={this.props.actions.switchTeam}
+                        displayName={intl.formatMessage({
+                            id: 'navbar_dropdown.create',
+                            defaultMessage: 'Create a Team',
+                        })}
                     />
                 </SystemPermissionGate>,
             );
@@ -339,3 +357,5 @@ export default class TeamSidebar extends React.PureComponent<Props, State> {
         );
     }
 }
+
+export default injectIntl(TeamSidebar);

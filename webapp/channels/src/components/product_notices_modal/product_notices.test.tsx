@@ -1,10 +1,11 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
 
-import GenericModal from 'components/generic_modal';
+import {GenericModal} from '@mattermost/components';
+
 import {isDesktopApp, getDesktopVersion} from 'utils/user_agent';
 
 import ProductNoticesModal from './product_notices_modal';
@@ -40,6 +41,7 @@ describe('ProductNoticesModal', () => {
             connectionId: '',
             lastConnectAt: 1599760193593,
             lastDisconnectAt: 0,
+            serverHostname: '',
         },
         actions: {
             getInProductNotices: jest.fn().mockResolvedValue({data: noticesData}),

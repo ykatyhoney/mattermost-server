@@ -2,22 +2,19 @@
 // See LICENSE.txt for license information.
 
 import {Client4} from 'mattermost-redux/client';
-
+import {Permissions} from 'mattermost-redux/constants';
+import {AppCallResponseTypes} from 'mattermost-redux/constants/apps';
 import * as Channels from 'mattermost-redux/selectors/entities/channels';
 import * as Teams from 'mattermost-redux/selectors/entities/teams';
 
-import {Permissions} from 'mattermost-redux/constants';
-import {AppCallResponseTypes} from 'mattermost-redux/constants/apps';
-
 import * as GlobalActions from 'actions/global_actions';
 
-import mockStore from 'tests/test_store';
+import UserSettingsModal from 'components/user_settings/modal';
 
+import mockStore from 'tests/test_store';
 import {ActionTypes, Constants, ModalIdentifiers} from 'utils/constants';
 import * as UserAgent from 'utils/user_agent';
 import * as Utils from 'utils/utils';
-
-import UserSettingsModal from 'components/user_settings/modal';
 
 import {executeCommand} from './command';
 
@@ -132,6 +129,7 @@ const initialState = {
         rhs: {
             rhsState: null,
             searchTerms: '',
+            searchType: '',
         },
     },
 };
@@ -153,6 +151,7 @@ describe('executeCommand', () => {
                 {type: 'UPDATE_RHS_SEARCH_TERMS', terms: 'foo bar'},
                 {type: 'UPDATE_RHS_STATE', state: 'search'},
                 {type: 'UPDATE_RHS_SEARCH_RESULTS_TERMS', terms: ''},
+                {type: 'UPDATE_RHS_SEARCH_RESULTS_TYPE', searchType: ''},
                 {type: 'SEARCH_POSTS_REQUEST', isGettingMore: false},
                 {type: 'SEARCH_FILES_REQUEST', isGettingMore: false},
             ]);
@@ -186,7 +185,7 @@ describe('executeCommand', () => {
                 modalId: ModalIdentifiers.KEYBOARD_SHORTCUTS_MODAL,
             });
 
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
     });
 
@@ -201,7 +200,7 @@ describe('executeCommand', () => {
                     modalId: 'user_settings',
                 },
             ]);
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
     });
 
@@ -223,7 +222,7 @@ describe('executeCommand', () => {
                 toHaveBeenCalledWith('/leave is not supported in reply threads. Use it in the center channel instead.',
                     'channel_id', 'root_id');
 
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
 
         test('should show private modal if channel is private', async () => {
@@ -239,7 +238,7 @@ describe('executeCommand', () => {
                 dialogProps: {channel: {type: Constants.PRIVATE_CHANNEL}},
             });
 
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
 
         test('should use user id as name if channel is dm', async () => {
@@ -251,7 +250,7 @@ describe('executeCommand', () => {
             const result = await store.dispatch(executeCommand('/leave', {}));
             expect(store.getActions()[0].data).toEqual([{category: 'direct_channel_show', name: 'userId', user_id: 'user123', value: 'false'}]);
 
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
 
         test('should use channel id as name if channel is gm', async () => {
@@ -263,7 +262,7 @@ describe('executeCommand', () => {
             const result = await store.dispatch(executeCommand('/leave', {}));
             expect(store.getActions()[0].data).toEqual([{category: 'group_channel_show', name: 'channelId', user_id: 'user123', value: 'false'}]);
 
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
     });
 
@@ -298,7 +297,7 @@ describe('executeCommand', () => {
                 type: ActionTypes.MODAL_OPEN,
                 modalId: ModalIdentifiers.PLUGIN_MARKETPLACE,
             });
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
 
         test('should show error when marketpace is not enabled', async () => {
@@ -398,7 +397,7 @@ describe('executeCommand', () => {
                 query: undefined,
                 selected_field: undefined,
             }, true);
-            expect(result).toEqual({data: true});
+            expect(result.data).toBeDefined();
         });
     });
 });

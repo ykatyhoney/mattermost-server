@@ -8,13 +8,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/localcachelayer"
-	"github.com/mattermost/mattermost-server/v6/server/config"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/filestore"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/store/localcachelayer"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
+	"github.com/mattermost/mattermost/server/v8/platform/shared/filestore"
 )
 
 type Option func(ps *PlatformService) error
@@ -44,13 +44,18 @@ func StoreOverride(override any) Option {
 	}
 }
 
+// StoreOverrideWithCache is a test option to construct the app with the store layer
+// wrapped on top of the store that is passed.
 func StoreOverrideWithCache(override store.Store) Option {
 	return func(ps *PlatformService) error {
 		ps.newStore = func() (store.Store, error) {
-			lcl, err := localcachelayer.NewLocalCacheLayer(override, ps.metricsIFace, ps.clusterIFace, ps.cacheProvider)
+			lcl, err := localcachelayer.NewLocalCacheLayer(override, ps.metricsIFace, ps.clusterIFace, ps.cacheProvider, ps.Log())
 			if err != nil {
 				return nil, err
 			}
+			// Clearing all the caches because the in-mem data
+			// is persisted in case of Redis.
+			lcl.Invalidate()
 			return lcl, nil
 		}
 
@@ -82,6 +87,13 @@ func SetFileStore(filestore filestore.FileBackend) Option {
 	}
 }
 
+func SetExportFileStore(filestore filestore.FileBackend) Option {
+	return func(ps *PlatformService) error {
+		ps.exportFilestore = filestore
+		return nil
+	}
+}
+
 // ConfigStore applies the given config store, typically to replace the traditional sources with a memory store for testing.
 func ConfigStore(configStore *config.Store) Option {
 	return func(ps *PlatformService) error {
@@ -109,6 +121,13 @@ func SetLogger(logger *mlog.Logger) Option {
 func SetCluster(cluster einterfaces.ClusterInterface) Option {
 	return func(ps *PlatformService) error {
 		ps.clusterIFace = cluster
+		return nil
+	}
+}
+
+func ForceEnableRedis() Option {
+	return func(ps *PlatformService) error {
+		ps.forceEnableRedis = true
 		return nil
 	}
 }

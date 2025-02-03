@@ -3,7 +3,6 @@
 
 import {mount} from 'enzyme';
 import React from 'react';
-
 import {Provider} from 'react-redux';
 
 import * as CustomStatusSelectors from 'selectors/views/custom_status';
@@ -33,7 +32,6 @@ describe('components/custom_status/custom_status_emoji', () => {
             <CustomStatusEmoji
                 emojiSize={34}
                 showTooltip={true}
-                tooltipDirection='bottom'
             />,
             {wrappingComponent: Provider, wrappingComponentProps: {store}},
         );

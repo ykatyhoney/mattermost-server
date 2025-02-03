@@ -3,6 +3,8 @@
 
 import React, {useEffect} from 'react';
 import {useIntl} from 'react-intl';
+import {useSelector} from 'react-redux';
+
 import {
     AccountMultipleOutlineIcon,
     ApplicationCogIcon,
@@ -11,30 +13,33 @@ import {
     ViewGridPlusOutlineIcon,
     WebhookIncomingIcon,
 } from '@mattermost/compass-icons/components';
+import type {UserProfile} from '@mattermost/types/users';
 
 import {Permissions} from 'mattermost-redux/constants';
+import {isCurrentUserSystemAdmin} from 'mattermost-redux/selectors/entities/users';
 
 import AboutBuildModal from 'components/about_build_modal';
+import {VisitSystemConsoleTour} from 'components/onboarding_tasks';
 import SystemPermissionGate from 'components/permissions_gates/system_permission_gate';
 import TeamPermissionGate from 'components/permissions_gates/team_permission_gate';
 import MarketplaceModal from 'components/plugin_marketplace/marketplace_modal';
+import UserGroupsModal from 'components/user_groups_modal';
 import Menu from 'components/widgets/menu/menu';
 import RestrictedIndicator from 'components/widgets/menu/menu_items/restricted_indicator';
-import {VisitSystemConsoleTour} from 'components/onboarding_tasks';
-import UserGroupsModal from 'components/user_groups_modal';
+
 import {FREEMIUM_TO_ENTERPRISE_TRIAL_LENGTH_DAYS} from 'utils/cloud_utils';
 import {LicenseSkus, ModalIdentifiers, MattermostFeatures} from 'utils/constants';
 import {makeUrlSafe} from 'utils/url';
 import * as UserAgent from 'utils/user_agent';
-import {ModalData} from 'types/actions';
-import {UserProfile} from '@mattermost/types/users';
+
+import type {ModalData} from 'types/actions';
 
 import './product_menu_list.scss';
 
 export type Props = {
     isMobile: boolean;
-    teamId: string;
-    teamName: string;
+    teamId?: string;
+    teamName?: string;
     siteName: string;
     currentUser: UserProfile;
     appDownloadLink: string;
@@ -82,6 +87,7 @@ const ProductMenuList = (props: Props): JSX.Element | null => {
         enableCustomUserGroups,
     } = props;
     const {formatMessage} = useIntl();
+    const isAdmin = useSelector(isCurrentUserSystemAdmin);
 
     useEffect(() => {
         props.actions.getPrevTrialLicense();
@@ -109,13 +115,6 @@ const ProductMenuList = (props: Props): JSX.Element | null => {
             <div onClick={onClick}>
                 <Menu.CloudTrial id='menuCloudTrial'/>
                 <Menu.ItemCloudLimit id='menuItemCloudLimit'/>
-                <SystemPermissionGate
-                    permissions={[Permissions.SYSCONSOLE_WRITE_ABOUT_EDITION_AND_LICENSE]}
-                >
-                    <Menu.StartTrial
-                        id='startTrial'
-                    />
-                </SystemPermissionGate>
                 <SystemPermissionGate permissions={Permissions.SYSCONSOLE_READ_PERMISSIONS}>
                     <Menu.ItemLink
                         id='systemConsole'
@@ -155,7 +154,7 @@ const ProductMenuList = (props: Props): JSX.Element | null => {
                     text={formatMessage({id: 'navbar_dropdown.userGroups', defaultMessage: 'User Groups'})}
                     icon={<AccountMultipleOutlineIcon size={18}/>}
                     disabled={isStarterFree}
-                    sibling={(isStarterFree || isFreeTrial) && (
+                    sibling={(isAdmin && (isStarterFree || isFreeTrial)) && (
                         <RestrictedIndicator
                             blocked={isStarterFree}
                             feature={MattermostFeatures.CUSTOM_USER_GROUPS}

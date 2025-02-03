@@ -4,8 +4,10 @@
 package slashcommands
 
 import (
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
+	"context"
+
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
 )
 
 type TeamEnvironment struct {
@@ -41,12 +43,12 @@ func (cfg *AutoTeamCreator) createRandomTeam() (*model.Team, error) {
 	var teamEmail string
 	var teamDisplayName string
 	var teamName string
+
+	teamEmail = "success+" + model.NewId() + "simulator.amazonses.com"
 	if cfg.Fuzzy {
-		teamEmail = "success+" + model.NewId() + "simulator.amazonses.com"
 		teamDisplayName = utils.FuzzName()
 		teamName = model.NewRandomTeamName()
 	} else {
-		teamEmail = "success+" + model.NewId() + "simulator.amazonses.com"
 		teamDisplayName = utils.RandomName(cfg.NameLength, cfg.NameCharset)
 		teamName = utils.RandomName(cfg.NameLength, cfg.NameCharset) + model.NewId()
 	}
@@ -57,7 +59,7 @@ func (cfg *AutoTeamCreator) createRandomTeam() (*model.Team, error) {
 		Type:        model.TeamOpen,
 	}
 
-	createdTeam, _, err := cfg.client.CreateTeam(team)
+	createdTeam, _, err := cfg.client.CreateTeam(context.Background(), team)
 	if err != nil {
 		return nil, err
 	}

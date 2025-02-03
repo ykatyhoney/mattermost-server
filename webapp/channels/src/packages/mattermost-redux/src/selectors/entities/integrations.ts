@@ -1,18 +1,21 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {createSelector} from 'reselect';
+import type {IncomingWebhook, OutgoingWebhook, Command} from '@mattermost/types/integrations';
+import type {GlobalState} from '@mattermost/types/store';
+import type {IDMappedObjects} from '@mattermost/types/utilities';
 
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
-
-import {OutgoingWebhook, Command} from '@mattermost/types/integrations';
-import {GlobalState} from '@mattermost/types/store';
-import {IDMappedObjects} from '@mattermost/types/utilities';
 
 import {appsEnabled} from './apps';
 
 export function getIncomingHooks(state: GlobalState) {
     return state.entities.integrations.incomingHooks;
+}
+
+export function getIncomingHooksTotalCount(state: GlobalState) {
+    return state.entities.integrations.incomingHooksTotalCount;
 }
 
 export function getOutgoingHooks(state: GlobalState) {
@@ -26,6 +29,21 @@ export function getCommands(state: GlobalState) {
 export function getOAuthApps(state: GlobalState) {
     return state.entities.integrations.oauthApps;
 }
+
+export function getOutgoingOAuthConnections(state: GlobalState) {
+    return state.entities.integrations.outgoingOAuthConnections;
+}
+
+export const getFilteredIncomingHooks: (state: GlobalState) => IncomingWebhook[] = createSelector(
+    'getFilteredIncomingHooks',
+    getCurrentTeamId,
+    getIncomingHooks,
+    (teamId, hooks) => {
+        return Object.keys(hooks).
+            map((key) => hooks[key]).
+            filter((incomingHook) => incomingHook.team_id === teamId);
+    },
+);
 
 export const getAppsOAuthAppIDs: (state: GlobalState) => string[] = createSelector(
     'getAppsOAuthAppIDs',

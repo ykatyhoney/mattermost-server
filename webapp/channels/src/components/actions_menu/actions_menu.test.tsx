@@ -3,14 +3,15 @@
 
 import React from 'react';
 
-import {PostType} from '@mattermost/types/posts';
-import {PluginComponent} from 'types/store/plugins';
+import type {PostType} from '@mattermost/types/posts';
 
 import {shallowWithIntl} from 'tests/helpers/intl-test-helper';
-
 import {TestHelper} from 'utils/test_helper';
 
-import ActionsMenu, {PLUGGABLE_COMPONENT, Props} from './actions_menu';
+import type {PostDropdownMenuAction} from 'types/store/plugins';
+
+import ActionsMenu from './actions_menu';
+import type {Props} from './actions_menu';
 
 jest.mock('utils/utils', () => {
     const original = jest.requireActual('utils/utils');
@@ -20,11 +21,13 @@ jest.mock('utils/utils', () => {
     };
 });
 
-const dropdownComponents: PluginComponent[] = [
+const dropdownComponents: PostDropdownMenuAction[] = [
     {
         id: 'the_component_id',
         pluginId: 'playbooks',
+        text: 'Some text',
         action: jest.fn(),
+        filter: () => true,
     },
 ];
 
@@ -38,7 +41,7 @@ describe('components/actions_menu/ActionsMenu', () => {
         isSysAdmin: true,
         pluginMenuItems: [],
         post: TestHelper.getPostMock({id: 'post_id_1', is_pinned: false, type: '' as PostType}),
-        components: {},
+        pluginMenuItemComponents: [],
         location: 'center',
         canOpenMarketplace: false,
         actions: {
@@ -116,9 +119,7 @@ describe('components/actions_menu/ActionsMenu', () => {
         expect(wrapper.find('#divider_post_post_id_1_marketplace').exists()).toBe(false);
 
         wrapper.setProps({
-            components: {
-                [PLUGGABLE_COMPONENT]: dropdownComponents,
-            },
+            pluginMenuItemComponents: dropdownComponents,
             canOpenMarketplace: true,
         });
         expect(wrapper.find('#divider_post_post_id_1_marketplace').exists()).toBe(true);
@@ -134,9 +135,7 @@ describe('components/actions_menu/ActionsMenu', () => {
         expect(wrapper.find('#divider_post_post_id_1_marketplace').exists()).toBe(false);
 
         wrapper.setProps({
-            components: {
-                [PLUGGABLE_COMPONENT]: dropdownComponents,
-            },
+            pluginMenuItemComponents: dropdownComponents,
         });
         expect(wrapper.find('#divider_post_post_id_1_marketplace').exists()).toBe(false);
     });

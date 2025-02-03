@@ -4,11 +4,11 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
 <div
   className="wrapper--fixed"
 >
-  <div
-    className="admin-console__header with-back"
+  <AdminHeader
+    withBackButton={true}
   >
     <div>
-      <Connect(BlockableLink)
+      <Connect(Component)
         className="fa fa-angle-left back"
         to="/admin_console/user_management/groups"
       />
@@ -17,7 +17,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         id="admin.group_settings.group_detail.group_configuration"
       />
     </div>
-  </div>
+  </AdminHeader>
   <div
     className="admin-console__wrapper"
   >
@@ -84,12 +84,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
             </MenuWrapper>
           </div>
         }
-        className=""
         id="group_teams_and_channels"
-        subtitleDefault="Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below."
-        subtitleId="admin.group_settings.group_detail.groupTeamsAndChannelsDescription"
-        titleDefault="Team and Channel Membership"
-        titleId="admin.group_settings.group_detail.groupTeamsAndChannelsTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below.",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Team and Channel Membership",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsTitle",
+          }
+        }
       >
         <GroupTeamsAndChannels
           channels={Array []}
@@ -100,7 +107,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
           teams={Array []}
         />
       </AdminPanel>
-      <Connect(ChannelSelectorModal)
+      <Connect(injectIntl(ChannelSelectorModal))
         alreadySelected={
           Array [
             "44444444444444444444444444",
@@ -113,12 +120,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         onModalDismissed={[Function]}
       />
       <AdminPanel
-        className=""
         id="group_users"
-        subtitleDefault="Listing of users in Mattermost associated with this group."
-        subtitleId="admin.group_settings.group_detail.groupUsersDescription"
-        titleDefault="Users"
-        titleId="admin.group_settings.group_detail.groupUsersTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Listing of users in Mattermost associated with this group.",
+            "id": "admin.group_settings.group_detail.groupUsersDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Users",
+            "id": "admin.group_settings.group_detail.groupUsersTitle",
+          }
+        }
       >
         <GroupUsers
           getMembers={[MockFunction]}
@@ -154,11 +168,11 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
 <div
   className="wrapper--fixed"
 >
-  <div
-    className="admin-console__header with-back"
+  <AdminHeader
+    withBackButton={true}
   >
     <div>
-      <Connect(BlockableLink)
+      <Connect(Component)
         className="fa fa-angle-left back"
         to="/admin_console/user_management/groups"
       />
@@ -167,7 +181,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         id="admin.group_settings.group_detail.group_configuration"
       />
     </div>
-  </div>
+  </AdminHeader>
   <div
     className="admin-console__wrapper"
   >
@@ -234,12 +248,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
             </MenuWrapper>
           </div>
         }
-        className=""
         id="group_teams_and_channels"
-        subtitleDefault="Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below."
-        subtitleId="admin.group_settings.group_detail.groupTeamsAndChannelsDescription"
-        titleDefault="Team and Channel Membership"
-        titleId="admin.group_settings.group_detail.groupTeamsAndChannelsTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below.",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Team and Channel Membership",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsTitle",
+          }
+        }
       >
         <GroupTeamsAndChannels
           channels={Array []}
@@ -250,7 +271,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
           teams={Array []}
         />
       </AdminPanel>
-      <Connect(TeamSelectorModal)
+      <Connect(injectIntl(TeamSelectorModal))
         alreadySelected={
           Array [
             "11111111111111111111111111",
@@ -262,12 +283,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         onTeamsSelected={[Function]}
       />
       <AdminPanel
-        className=""
         id="group_users"
-        subtitleDefault="Listing of users in Mattermost associated with this group."
-        subtitleId="admin.group_settings.group_detail.groupUsersDescription"
-        titleDefault="Users"
-        titleId="admin.group_settings.group_detail.groupUsersTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Listing of users in Mattermost associated with this group.",
+            "id": "admin.group_settings.group_detail.groupUsersDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Users",
+            "id": "admin.group_settings.group_detail.groupUsersTitle",
+          }
+        }
       >
         <GroupUsers
           getMembers={[MockFunction]}
@@ -303,11 +331,11 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
 <div
   className="wrapper--fixed"
 >
-  <div
-    className="admin-console__header with-back"
+  <AdminHeader
+    withBackButton={true}
   >
     <div>
-      <Connect(BlockableLink)
+      <Connect(Component)
         className="fa fa-angle-left back"
         to="/admin_console/user_management/groups"
       />
@@ -316,7 +344,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         id="admin.group_settings.group_detail.group_configuration"
       />
     </div>
-  </div>
+  </AdminHeader>
   <div
     className="admin-console__wrapper"
   >
@@ -383,12 +411,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
             </MenuWrapper>
           </div>
         }
-        className=""
         id="group_teams_and_channels"
-        subtitleDefault="Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below."
-        subtitleId="admin.group_settings.group_detail.groupTeamsAndChannelsDescription"
-        titleDefault="Team and Channel Membership"
-        titleId="admin.group_settings.group_detail.groupTeamsAndChannelsTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below.",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Team and Channel Membership",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsTitle",
+          }
+        }
       >
         <GroupTeamsAndChannels
           channels={Array []}
@@ -400,12 +435,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         />
       </AdminPanel>
       <AdminPanel
-        className=""
         id="group_users"
-        subtitleDefault="Listing of users in Mattermost associated with this group."
-        subtitleId="admin.group_settings.group_detail.groupUsersDescription"
-        titleDefault="Users"
-        titleId="admin.group_settings.group_detail.groupUsersTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Listing of users in Mattermost associated with this group.",
+            "id": "admin.group_settings.group_detail.groupUsersDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Users",
+            "id": "admin.group_settings.group_detail.groupUsersTitle",
+          }
+        }
       >
         <GroupUsers
           getMembers={[MockFunction]}
@@ -441,11 +483,11 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
 <div
   className="wrapper--fixed"
 >
-  <div
-    className="admin-console__header with-back"
+  <AdminHeader
+    withBackButton={true}
   >
     <div>
-      <Connect(BlockableLink)
+      <Connect(Component)
         className="fa fa-angle-left back"
         to="/admin_console/user_management/groups"
       />
@@ -454,7 +496,7 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         id="admin.group_settings.group_detail.group_configuration"
       />
     </div>
-  </div>
+  </AdminHeader>
   <div
     className="admin-console__wrapper"
   >
@@ -521,12 +563,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
             </MenuWrapper>
           </div>
         }
-        className=""
         id="group_teams_and_channels"
-        subtitleDefault="Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below."
-        subtitleId="admin.group_settings.group_detail.groupTeamsAndChannelsDescription"
-        titleDefault="Team and Channel Membership"
-        titleId="admin.group_settings.group_detail.groupTeamsAndChannelsTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Set default teams and channels for group members. Teams added will include default channels, town-square, and off-topic. Adding a channel without setting the team will add the implied team to the listing below.",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Team and Channel Membership",
+            "id": "admin.group_settings.group_detail.groupTeamsAndChannelsTitle",
+          }
+        }
       >
         <GroupTeamsAndChannels
           channels={Array []}
@@ -538,12 +587,19 @@ exports[`components/admin_console/group_settings/group_details/GroupDetails shou
         />
       </AdminPanel>
       <AdminPanel
-        className=""
         id="group_users"
-        subtitleDefault="Listing of users in Mattermost associated with this group."
-        subtitleId="admin.group_settings.group_detail.groupUsersDescription"
-        titleDefault="Users"
-        titleId="admin.group_settings.group_detail.groupUsersTitle"
+        subtitle={
+          Object {
+            "defaultMessage": "Listing of users in Mattermost associated with this group.",
+            "id": "admin.group_settings.group_detail.groupUsersDescription",
+          }
+        }
+        title={
+          Object {
+            "defaultMessage": "Users",
+            "id": "admin.group_settings.group_detail.groupUsersTitle",
+          }
+        }
       >
         <GroupUsers
           getMembers={[MockFunction]}

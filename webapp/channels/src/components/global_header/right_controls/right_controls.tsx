@@ -3,29 +3,28 @@
 
 import React from 'react';
 import {useSelector} from 'react-redux';
-
 import styled from 'styled-components';
 
-import {ProductIdentifier} from '@mattermost/types/products';
+import type {ProductIdentifier} from '@mattermost/types/products';
 
-import {GlobalState} from 'types/store';
+import {isCurrentUserGuestUser} from 'mattermost-redux/selectors/entities/users';
 
-import Pluggable from 'plugins/pluggable';
+import {OnboardingTourSteps, OnboardingTourStepsForGuestUsers} from 'components/tours';
 import {
     CustomizeYourExperienceTour,
     useShowOnboardingTutorialStep,
 } from 'components/tours/onboarding_tour';
-import StatusDropdown from 'components/status_dropdown';
-import {OnboardingTourSteps, OnboardingTourStepsForGuestUsers} from 'components/tours';
+import UserAccountMenu from 'components/user_account_menu';
 
+import Pluggable from 'plugins/pluggable';
 import {isChannels} from 'utils/products';
 
-import {isCurrentUserGuestUser} from 'mattermost-redux/selectors/entities/users';
+import type {GlobalState} from 'types/store';
 
 import AtMentionsButton from './at_mentions_button/at_mentions_button';
+import PlanUpgradeButton from './plan_upgrade_button';
 import SavedPostsButton from './saved_posts_button/saved_posts_button';
 import SettingsButton from './settings_button';
-import PlanUpgradeButton from './plan_upgrade_button';
 
 const RightControlsContainer = styled.div`
     display: flex;
@@ -39,6 +38,12 @@ const RightControlsContainer = styled.div`
     > * + * {
         margin-left: 8px;
     }
+`;
+
+const StyledCustomizeYourExperienceTour = styled.div`
+    display: flex;
+    align-items: center;
+    height: 100%
 `;
 
 export type Props = {
@@ -61,8 +66,6 @@ const RightControls = ({productId = null}: Props): JSX.Element => {
                 <>
                     <AtMentionsButton/>
                     <SavedPostsButton/>
-                    <SettingsButton/>
-                    {showCustomizeTip && <CustomizeYourExperienceTour/>}
                 </>
             ) : (
                 <Pluggable
@@ -71,7 +74,17 @@ const RightControls = ({productId = null}: Props): JSX.Element => {
                     pluggableId={productId}
                 />
             )}
-            <StatusDropdown/>
+            <StyledCustomizeYourExperienceTour id='CustomizeYourExperienceTour'>
+                {
+                    isChannels(productId) ? (
+                        <>
+                            <SettingsButton/>
+                            {showCustomizeTip && <CustomizeYourExperienceTour/>}
+                        </>
+                    ) : null
+                }
+                <UserAccountMenu/>
+            </StyledCustomizeYourExperienceTour>
         </RightControlsContainer>
     );
 };

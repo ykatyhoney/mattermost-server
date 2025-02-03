@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin/plugintest/mock"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest/mock"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
 )
 
 type mockMarketplaceMeteringClient struct {
@@ -24,7 +24,7 @@ type mockMarketplaceMeteringClient struct {
 
 func (m *mockMarketplaceMeteringClient) MeterUsage(input *marketplacemetering.MeterUsageInput) (*marketplacemetering.MeterUsageOutput, error) {
 	return &marketplacemetering.MeterUsageOutput{
-		MeteringRecordId: String("1"),
+		MeteringRecordId: model.NewPointer("1"),
 	}, nil
 }
 
@@ -36,9 +36,6 @@ func (m *mockMarketplaceMeteringClientWithError) MeterUsage(input *marketplaceme
 	return nil, errors.New("error")
 }
 
-func String(i string) *string {
-	return &i
-}
 func TestAwsMeterUsage(t *testing.T) {
 	startTime := time.Now()
 	endTime := time.Now()

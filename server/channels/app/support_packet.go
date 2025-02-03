@@ -5,238 +5,359 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
-	"runtime"
-	"strings"
+	"slices"
+	"sync"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/config"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/request"
 )
 
-func (a *App) GenerateSupportPacket() []model.FileData {
-	// If any errors we come across within this function, we will log it in a warning.txt file so that we know why certain files did not get produced if any
-	var warnings []string
-
-	// Creating an array of files that we are going to be adding to our zip file
-	fileDatas := []model.FileData{}
-
-	// A array of the functions that we can iterate through since they all have the same return value
-	functions := []func() (*model.FileData, string){
-		a.generateSupportPacketYaml,
-		a.createPluginsFile,
-		a.createSanitizedConfigFile,
-		a.getMattermostLog,
-		a.getNotificationsLog,
+func (a *App) GenerateSupportPacket(rctx request.CTX, options *model.SupportPacketOptions) []model.FileData {
+	functions := map[string]func(c request.CTX) (*model.FileData, error){
+		"metadata":    a.getSupportPacketMetadata,
+		"stats":       a.getSupportPacketStats,
+		"jobs":        a.getSupportPacketJobList,
+		"permissions": a.getSupportPacketPermissionsInfo,
+		"plugins":     a.getPluginsFile,
 	}
 
-	for _, fn := range functions {
-		fileData, warning := fn()
+	var (
+		// If any errors we come across within this function, we will log it in a warning.txt file so that we know why certain files did not get produced if any
+		warnings *multierror.Error
+		// Creating an array of files that we are going to be adding to our zip file
+		fileDatas []model.FileData
+		wg        sync.WaitGroup
+		mut       sync.Mutex // Protects warnings and fileDatas
+	)
 
-		if fileData != nil {
-			fileDatas = append(fileDatas, *fileData)
-		} else {
-			warnings = append(warnings, warning)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for name, fn := range functions {
+			fileData, err := fn(rctx)
+			mut.Lock()
+			if err != nil {
+				rctx.Logger().Error("Failed to generate file for Support Packet",
+					mlog.String("file", name),
+					mlog.Err(err),
+				)
+				warnings = multierror.Append(warnings, err)
+			}
+
+			if fileData != nil {
+				fileDatas = append(fileDatas, *fileData)
+			}
+			mut.Unlock()
 		}
+
+		// Generate platform support packet
+		files, err := a.Srv().Platform().GenerateSupportPacket(rctx, options)
+		mut.Lock()
+		if err != nil {
+			warnings = multierror.Append(warnings, err)
+		}
+		if files != nil {
+			fileDatas = append(fileDatas, files...)
+		}
+		mut.Unlock()
+	}()
+
+	// Run the cluster generation in a separate goroutine as CPU profile generation and file upload can take a long time
+	if cluster := a.Cluster(); cluster != nil && *a.Config().ClusterSettings.Enable {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			files, err := cluster.GenerateSupportPacket(rctx, options)
+			mut.Lock()
+			if err != nil {
+				rctx.Logger().Error("Failed to generate Support Packet from cluster nodes", mlog.Err(err))
+				warnings = multierror.Append(warnings, err)
+			}
+
+			for _, node := range files {
+				fileDatas = append(fileDatas, node...)
+			}
+			mut.Unlock()
+		}()
 	}
+
+	wg.Wait()
+
+	pluginContext := pluginContext(rctx)
+	a.ch.RunMultiHook(func(hooks plugin.Hooks, manifest *model.Manifest) bool {
+		// If the plugin defined the support_packet prop it means there is a UI element to include it in the support packet.
+		// Check if the plugin is in the list of plugins to include in the Support Packet.
+		if _, ok := manifest.Props["support_packet"]; ok {
+			if !slices.Contains(options.PluginPackets, manifest.Id) {
+				return true
+			}
+		}
+
+		// Otherwise, just call the hook as the plugin decided to always include it in the Support Packet.
+		pluginData, err := hooks.GenerateSupportData(pluginContext)
+		if err != nil {
+			rctx.Logger().Warn("Failed to generate plugin file for Support Packet", mlog.String("plugin", manifest.Id), mlog.Err(err))
+			warnings = multierror.Append(warnings, err)
+			return true
+		}
+
+		for _, data := range pluginData {
+			fileDatas = append(fileDatas, *data)
+		}
+
+		return true
+	}, plugin.GenerateSupportDataID)
 
 	// Adding a warning.txt file to the fileDatas if any warning
-	if len(warnings) > 0 {
-		finalWarning := strings.Join(warnings, "\n")
+	if warnings != nil {
 		fileDatas = append(fileDatas, model.FileData{
-			Filename: "warning.txt",
-			Body:     []byte(finalWarning),
+			Filename: model.SupportPacketErrorFile,
+			Body:     []byte(warnings.Error()),
 		})
 	}
 
 	return fileDatas
 }
 
-func (a *App) generateSupportPacketYaml() (*model.FileData, string) {
-	// Here we are getting information regarding Elastic Search
-	var elasticServerVersion string
-	var elasticServerPlugins []string
-	if a.Srv().Platform().SearchEngine.ElasticsearchEngine != nil {
-		elasticServerVersion = a.Srv().Platform().SearchEngine.ElasticsearchEngine.GetFullVersion()
-		elasticServerPlugins = a.Srv().Platform().SearchEngine.ElasticsearchEngine.GetPlugins()
-	}
+func (a *App) getSupportPacketStats(rctx request.CTX) (*model.FileData, error) {
+	var (
+		rErr  *multierror.Error
+		err   error
+		stats model.SupportPacketStats
+	)
 
-	// Here we are getting information regarding LDAP
-	ldapInterface := a.ch.Ldap
-	var vendorName, vendorVersion string
-	if ldapInterface != nil {
-		vendorName, vendorVersion = ldapInterface.GetVendorNameAndVendorVersion()
-	}
-
-	// Here we are getting information regarding the database (mysql/postgres + current schema version)
-	databaseType, databaseSchemaVersion := a.Srv().DatabaseTypeAndSchemaVersion()
-
-	databaseVersion, _ := a.Srv().Store().GetDbVersion(false)
-
-	uniqueUserCount, err := a.Srv().Store().User().Count(model.UserCountOptions{})
+	stats.RegisteredUsers, err = a.Srv().Store().User().Count(model.UserCountOptions{IncludeDeleted: true})
 	if err != nil {
-		return nil, errors.Wrap(err, "error while getting user count").Error()
+		rErr = multierror.Append(errors.Wrap(err, "failed to get registered user count"))
 	}
 
-	analytics, err := a.GetAnalytics("standard", "")
-	if analytics == nil {
-		return nil, errors.Wrap(err, "error while getting analytics").Error()
+	stats.ActiveUsers, err = a.Srv().Store().User().Count(model.UserCountOptions{})
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get active user count"))
 	}
 
-	elasticPostIndexing, _ := a.Srv().Store().Job().GetAllByTypePage("elasticsearch_post_indexing", 0, 2)
-	elasticPostAggregation, _ := a.Srv().Store().Job().GetAllByTypePage("elasticsearch_post_aggregation", 0, 2)
-	ldapSyncJobs, _ := a.Srv().Store().Job().GetAllByTypePage("ldap_sync", 0, 2)
-	messageExport, _ := a.Srv().Store().Job().GetAllByTypePage("message_export", 0, 2)
-	dataRetentionJobs, _ := a.Srv().Store().Job().GetAllByTypePage("data_retention", 0, 2)
-	complianceJobs, _ := a.Srv().Store().Job().GetAllByTypePage("compliance", 0, 2)
-	migrationJobs, _ := a.Srv().Store().Job().GetAllByTypePage("migrations", 0, 2)
-
-	licenseTo := ""
-	supportedUsers := 0
-	if license := a.Srv().License(); license != nil {
-		supportedUsers = *license.Features.Users
-		licenseTo = license.Customer.Company
+	stats.DailyActiveUsers, err = a.Srv().Store().User().AnalyticsActiveCount(DayMilliseconds, model.UserCountOptions{IncludeBotAccounts: false, IncludeDeleted: false})
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get daily active user count"))
 	}
 
-	// Creating the struct for support packet yaml file
-	supportPacket := model.SupportPacket{
-		LicenseTo:                  licenseTo,
-		ServerOS:                   runtime.GOOS,
-		ServerArchitecture:         runtime.GOARCH,
-		ServerVersion:              model.CurrentVersion,
-		BuildHash:                  model.BuildHash,
-		DatabaseType:               databaseType,
-		DatabaseVersion:            databaseVersion,
-		DatabaseSchemaVersion:      databaseSchemaVersion,
-		LdapVendorName:             vendorName,
-		LdapVendorVersion:          vendorVersion,
-		ElasticServerVersion:       elasticServerVersion,
-		ElasticServerPlugins:       elasticServerPlugins,
-		ActiveUsers:                int(uniqueUserCount),
-		LicenseSupportedUsers:      supportedUsers,
-		TotalChannels:              int(analytics[0].Value) + int(analytics[1].Value),
-		TotalPosts:                 int(analytics[2].Value),
-		TotalTeams:                 int(analytics[4].Value),
-		WebsocketConnections:       int(analytics[5].Value),
-		MasterDbConnections:        int(analytics[6].Value),
-		ReplicaDbConnections:       int(analytics[7].Value),
-		DailyActiveUsers:           int(analytics[8].Value),
-		MonthlyActiveUsers:         int(analytics[9].Value),
-		InactiveUserCount:          int(analytics[10].Value),
-		ElasticPostIndexingJobs:    elasticPostIndexing,
-		ElasticPostAggregationJobs: elasticPostAggregation,
-		LdapSyncJobs:               ldapSyncJobs,
-		MessageExportJobs:          messageExport,
-		DataRetentionJobs:          dataRetentionJobs,
-		ComplianceJobs:             complianceJobs,
-		MigrationJobs:              migrationJobs,
+	stats.MonthlyActiveUsers, err = a.Srv().Store().User().AnalyticsActiveCount(MonthMilliseconds, model.UserCountOptions{IncludeBotAccounts: false, IncludeDeleted: false})
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get monthly active user count"))
 	}
 
-	// Marshal to a Yaml File
-	supportPacketYaml, err := yaml.Marshal(&supportPacket)
-	if err == nil {
-		fileData := model.FileData{
-			Filename: "support_packet.yaml",
-			Body:     supportPacketYaml,
-		}
-		return &fileData, ""
+	stats.DeactivatedUsers, err = a.Srv().Store().User().AnalyticsGetInactiveUsersCount()
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get deactivated user count"))
 	}
 
-	warning := fmt.Sprintf("yaml.Marshal(&supportPacket) Error: %s", err.Error())
-	return nil, warning
+	stats.Guests, err = a.Srv().Store().User().AnalyticsGetGuestCount()
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get guest count"))
+	}
+
+	stats.BotAccounts, err = a.Srv().Store().User().Count(model.UserCountOptions{IncludeBotAccounts: true, ExcludeRegularUsers: true})
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get bot acount count"))
+	}
+
+	stats.Posts, err = a.Srv().Store().Post().AnalyticsPostCount(&model.PostCountOptions{})
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get post count"))
+	}
+
+	openChannels, err := a.Srv().Store().Channel().AnalyticsTypeCount("", model.ChannelTypeOpen)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get open channels count"))
+	}
+	privateChannels, err := a.Srv().Store().Channel().AnalyticsTypeCount("", model.ChannelTypePrivate)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get private channels count"))
+	}
+	stats.Channels = openChannels + privateChannels
+
+	stats.Teams, err = a.Srv().Store().Team().AnalyticsTeamCount(nil)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get team count"))
+	}
+
+	stats.SlashCommands, err = a.Srv().Store().Command().AnalyticsCommandCount("")
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get command count"))
+	}
+
+	stats.IncomingWebhooks, err = a.Srv().Store().Webhook().AnalyticsIncomingCount("", "")
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get incoming webhook count"))
+	}
+
+	stats.OutgoingWebhooks, err = a.Srv().Store().Webhook().AnalyticsOutgoingCount("")
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to get  outgoing webhook count"))
+	}
+
+	b, err := yaml.Marshal(&stats)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to marshal Support Packet into yaml"))
+	}
+
+	fileData := &model.FileData{
+		Filename: "stats.yaml",
+		Body:     b,
+	}
+	return fileData, rErr.ErrorOrNil()
 }
 
-func (a *App) createPluginsFile() (*model.FileData, string) {
-	var warning string
+func (a *App) getSupportPacketJobList(rctx request.CTX) (*model.FileData, error) {
+	const numberOfJobsRuns = 5
 
+	var (
+		rErr *multierror.Error
+		err  error
+		jobs model.SupportPacketJobList
+	)
+
+	jobs.LDAPSyncJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeLdapSync, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting LDAP sync jobs"))
+	}
+	jobs.DataRetentionJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeDataRetention, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting data retention jobs"))
+	}
+	jobs.MessageExportJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeMessageExport, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting message export jobs"))
+	}
+	jobs.ElasticPostIndexingJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeElasticsearchPostIndexing, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting ES post indexing jobs"))
+	}
+	jobs.ElasticPostAggregationJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeElasticsearchPostAggregation, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting ES post aggregation jobs"))
+	}
+	jobs.BlevePostIndexingJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeBlevePostIndexing, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting bleve post indexing jobs"))
+	}
+	jobs.MigrationJobs, err = a.Srv().Store().Job().GetAllByTypePage(rctx, model.JobTypeMigrations, 0, numberOfJobsRuns)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "error while getting migration jobs"))
+	}
+
+	b, err := yaml.Marshal(&jobs)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to marshal jobs list into yaml"))
+	}
+
+	fileData := &model.FileData{
+		Filename: "jobs.yaml",
+		Body:     b,
+	}
+	return fileData, rErr.ErrorOrNil()
+}
+
+func (a *App) getSupportPacketPermissionsInfo(_ request.CTX) (*model.FileData, error) {
+	var (
+		rErr        *multierror.Error
+		err         error
+		permissions model.SupportPacketPermissionInfo
+	)
+
+	var allSchemes []*model.Scheme
+	perPage := 100
+	page := 0
+	for {
+		schemes, appErr := a.GetSchemesPage("", page, perPage)
+		if appErr != nil {
+			rErr = multierror.Append(errors.Wrap(appErr, "failed to get list of schemes"))
+			break
+		}
+
+		allSchemes = append(allSchemes, schemes...)
+		if len(schemes) < perPage {
+			break
+		}
+		page++
+	}
+
+	for _, s := range allSchemes {
+		s.Sanitize()
+	}
+	permissions.Schemes = allSchemes
+
+	roles, appErr := a.GetAllRoles()
+	if appErr != nil {
+		rErr = multierror.Append(errors.Wrap(appErr, "failed to get list of roles"))
+	}
+
+	for _, r := range roles {
+		r.Sanitize()
+	}
+	permissions.Roles = roles
+
+	b, err := yaml.Marshal(&permissions)
+	if err != nil {
+		rErr = multierror.Append(errors.Wrap(err, "failed to marshal permission info into yaml"))
+	}
+
+	fileData := &model.FileData{
+		Filename: "permissions.yaml",
+		Body:     b,
+	}
+	return fileData, rErr.ErrorOrNil()
+}
+
+func (a *App) getPluginsFile(_ request.CTX) (*model.FileData, error) {
 	// Getting the plugins installed on the server, prettify it, and then add them to the file data array
-	pluginsResponse, appErr := a.GetPlugins()
-	if appErr == nil {
-		pluginsPrettyJSON, err := json.MarshalIndent(pluginsResponse, "", "    ")
-		if err == nil {
-			fileData := model.FileData{
-				Filename: "plugins.json",
-				Body:     pluginsPrettyJSON,
-			}
-
-			return &fileData, ""
-		}
-
-		warning = fmt.Sprintf("json.MarshalIndent(pluginsResponse) Error: %s", err.Error())
-	} else {
-		warning = fmt.Sprintf("c.App.GetPlugins() Error: %s", appErr.Error())
+	plugins, appErr := a.GetPlugins()
+	if appErr != nil {
+		return nil, errors.Wrap(appErr, "failed to get plugin list for Support Packet")
 	}
 
-	return nil, warning
+	var pluginList model.SupportPacketPluginList
+	for _, p := range plugins.Active {
+		pluginList.Enabled = append(pluginList.Enabled, p.Manifest)
+	}
+	for _, p := range plugins.Inactive {
+		pluginList.Disabled = append(pluginList.Disabled, p.Manifest)
+	}
+
+	pluginsPrettyJSON, err := json.MarshalIndent(pluginList, "", "    ")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal plugin list into json")
+	}
+
+	fileData := &model.FileData{
+		Filename: "plugins.json",
+		Body:     pluginsPrettyJSON,
+	}
+	return fileData, nil
 }
 
-func (a *App) getNotificationsLog() (*model.FileData, string) {
-	var warning string
-
-	// Getting notifications.log
-	if *a.Config().NotificationLogSettings.EnableFile {
-		// notifications.log
-		notificationsLog := config.GetNotificationsLogFileLocation(*a.Config().LogSettings.FileLocation)
-
-		notificationsLogFileData, notificationsLogFileDataErr := os.ReadFile(notificationsLog)
-
-		if notificationsLogFileDataErr == nil {
-			fileData := model.FileData{
-				Filename: "notifications.log",
-				Body:     notificationsLogFileData,
-			}
-			return &fileData, ""
-		}
-
-		warning = fmt.Sprintf("os.ReadFile(notificationsLog) Error: %s", notificationsLogFileDataErr.Error())
-
-	} else {
-		warning = "Unable to retrieve notifications.log because LogSettings: EnableFile is false in config.json"
+func (a *App) getSupportPacketMetadata(_ request.CTX) (*model.FileData, error) {
+	metadata, err := model.GeneratePacketMetadata(model.SupportPacketType, a.TelemetryId(), a.License(), nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate Packet metadata")
 	}
 
-	return nil, warning
-}
-
-func (a *App) getMattermostLog() (*model.FileData, string) {
-	var warning string
-
-	// Getting mattermost.log
-	if *a.Config().LogSettings.EnableFile {
-		// mattermost.log
-		mattermostLog := config.GetLogFileLocation(*a.Config().LogSettings.FileLocation)
-
-		mattermostLogFileData, mattermostLogFileDataErr := os.ReadFile(mattermostLog)
-
-		if mattermostLogFileDataErr == nil {
-			fileData := model.FileData{
-				Filename: "mattermost.log",
-				Body:     mattermostLogFileData,
-			}
-			return &fileData, ""
-		}
-		warning = fmt.Sprintf("os.ReadFile(mattermostLog) Error: %s", mattermostLogFileDataErr.Error())
-
-	} else {
-		warning = "Unable to retrieve mattermost.log because LogSettings: EnableFile is false in config.json"
+	b, err := yaml.Marshal(metadata)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal Packet metadata into yaml")
 	}
 
-	return nil, warning
-}
-
-func (a *App) createSanitizedConfigFile() (*model.FileData, string) {
-	// Getting sanitized config, prettifying it, and then adding it to our file data array
-	sanitizedConfigPrettyJSON, err := json.MarshalIndent(a.GetSanitizedConfig(), "", "    ")
-	if err == nil {
-		fileData := model.FileData{
-			Filename: "sanitized_config.json",
-			Body:     sanitizedConfigPrettyJSON,
-		}
-		return &fileData, ""
+	fileData := &model.FileData{
+		Filename: model.PacketMetadataFileName,
+		Body:     b,
 	}
-
-	warning := fmt.Sprintf("json.MarshalIndent(c.App.GetSanitizedConfig()) Error: %s", err.Error())
-	return nil, warning
+	return fileData, nil
 }

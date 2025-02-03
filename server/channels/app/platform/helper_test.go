@@ -10,16 +10,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/channels/testlib"
-	"github.com/mattermost/mattermost-server/v6/server/config"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/v8/channels/testlib"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
 )
 
 type TestHelper struct {
+	Context request.CTX
 	Service *PlatformService
 	Suite   SuiteIFace
 
@@ -52,8 +55,11 @@ func (ms *mockSuite) GetSession(token string) (*model.Session, *model.AppError) 
 	return &model.Session{}, nil
 }
 func (ms *mockSuite) RolesGrantPermission(roleNames []string, permissionId string) bool { return true }
-func (ms *mockSuite) UserCanSeeOtherUser(userID string, otherUserId string) (bool, *model.AppError) {
+func (ms *mockSuite) UserCanSeeOtherUser(c request.CTX, userID string, otherUserId string) (bool, *model.AppError) {
 	return true, nil
+}
+func (ms *mockSuite) HasPermissionToReadChannel(c request.CTX, userID string, channel *model.Channel) bool {
+	return true
 }
 
 func Setup(tb testing.TB, options ...Option) *TestHelper {
@@ -99,16 +105,8 @@ func (th *TestHelper) InitBasic() *TestHelper {
 
 func SetupWithStoreMock(tb testing.TB, options ...Option) *TestHelper {
 	mockStore := testlib.GetMockStoreForSetupFunctions()
+	options = append(options, StoreOverride(mockStore))
 	th := setupTestHelper(mockStore, false, false, tb, options...)
-	statusMock := mocks.StatusStore{}
-	statusMock.On("UpdateExpiredDNDStatuses").Return([]*model.Status{}, nil)
-	statusMock.On("Get", "user1").Return(&model.Status{UserId: "user1", Status: model.StatusOnline}, nil)
-	statusMock.On("UpdateLastActivityAt", "user1", mock.Anything).Return(nil)
-	statusMock.On("SaveOrUpdate", mock.AnythingOfType("*model.Status")).Return(nil)
-	emptyMockStore := mocks.Store{}
-	emptyMockStore.On("Close").Return(nil)
-	emptyMockStore.On("Status").Return(&statusMock)
-	th.Service.Store = &emptyMockStore
 	return th
 }
 
@@ -136,6 +134,7 @@ func setupTestHelper(dbStore store.Store, enterprise bool, includeCacheLayer boo
 	configStore := config.NewTestMemoryStore()
 
 	memoryConfig := configStore.Get()
+	memoryConfig.SqlSettings = *mainHelper.GetSQLSettings()
 	*memoryConfig.PluginSettings.Directory = filepath.Join(tempWorkspace, "plugins")
 	*memoryConfig.PluginSettings.ClientDirectory = filepath.Join(tempWorkspace, "webapp")
 	*memoryConfig.PluginSettings.AutomaticPrepackagedPlugins = false
@@ -145,19 +144,35 @@ func setupTestHelper(dbStore store.Store, enterprise bool, includeCacheLayer boo
 	*memoryConfig.MetricsSettings.Enable = true
 	*memoryConfig.ServiceSettings.ListenAddress = "localhost:0"
 	*memoryConfig.MetricsSettings.ListenAddress = "localhost:0"
-	configStore.Set(memoryConfig)
+	_, _, err = configStore.Set(memoryConfig)
+	require.NoError(tb, err)
 
-	ps, err := New(ServiceConfig{
-		ConfigStore: configStore,
-		Store:       dbStore,
-	}, options...)
+	options = append(options, ConfigStore(configStore))
+
+	ps, err := New(
+		ServiceConfig{
+			Store: dbStore,
+		}, options...)
 	if err != nil {
-		panic(err)
+		require.NoError(tb, err)
 	}
 
 	th := &TestHelper{
+		Context: request.TestContext(tb),
 		Service: ps,
 		Suite:   &mockSuite{},
+	}
+
+	if _, ok := dbStore.(*mocks.Store); ok {
+		statusMock := mocks.StatusStore{}
+		statusMock.On("UpdateExpiredDNDStatuses").Return([]*model.Status{}, nil)
+		statusMock.On("Get", "user1").Return(&model.Status{UserId: "user1", Status: model.StatusOnline}, nil)
+		statusMock.On("UpdateLastActivityAt", "user1", mock.Anything).Return(nil)
+		statusMock.On("SaveOrUpdate", mock.AnythingOfType("*model.Status")).Return(nil)
+		emptyMockStore := mocks.Store{}
+		emptyMockStore.On("Close").Return(nil)
+		emptyMockStore.On("Status").Return(&statusMock)
+		th.Service.Store = &emptyMockStore
 	}
 
 	// Share same configuration with app.TestHelper
@@ -182,7 +197,7 @@ func setupTestHelper(dbStore store.Store, enterprise bool, includeCacheLayer boo
 		th.Service.SetLicense(nil)
 	}
 
-	err = th.Service.Start()
+	err = th.Service.Start(nil)
 	if err != nil {
 		panic(err)
 	}
@@ -226,7 +241,7 @@ func (th *TestHelper) CreateUserOrGuest(guest bool) *model.User {
 	}
 
 	var err error
-	user, err = th.Service.Store.User().Save(user)
+	user, err = th.Service.Store.User().Save(th.Context, user)
 	if err != nil {
 		panic(err)
 	}
@@ -247,7 +262,7 @@ func (th *TestHelper) CreateAdmin() *model.User {
 	}
 
 	var err error
-	user, err = th.Service.Store.User().Save(user)
+	user, err = th.Service.Store.User().Save(th.Context, user)
 	if err != nil {
 		panic(err)
 	}
@@ -259,7 +274,7 @@ type ChannelOption func(*model.Channel)
 
 func WithShared(v bool) ChannelOption {
 	return func(channel *model.Channel) {
-		channel.Shared = model.NewBool(v)
+		channel.Shared = model.NewPointer(v)
 	}
 }
 
@@ -278,7 +293,7 @@ func (th *TestHelper) CreateChannel(team *model.Team, options ...ChannelOption) 
 	}
 
 	var err error
-	channel, err = th.Service.Store.Channel().Save(channel, 999)
+	channel, err = th.Service.Store.Channel().Save(th.Context, channel, 999)
 	if err != nil {
 		panic(err)
 	}

@@ -4,7 +4,9 @@
 import {shallow} from 'enzyme';
 import React from 'react';
 
-import ActionsMenu, {Props} from 'components/actions_menu/actions_menu';
+import ActionsMenu from 'components/actions_menu/actions_menu';
+import type {Props} from 'components/actions_menu/actions_menu';
+
 import {TestHelper} from 'utils/test_helper';
 
 jest.mock('utils/utils', () => {
@@ -26,7 +28,6 @@ describe('components/actions_menu/ActionsMenu on mobile view', () => {
     test('should match snapshot', () => {
         const baseProps: Omit<Props, 'intl'> = {
             post: TestHelper.getPostMock({id: 'post_id_1'}),
-            components: {},
             teamId: 'team_id_1',
             actions: {
                 openModal: jest.fn(),
@@ -40,6 +41,7 @@ describe('components/actions_menu/ActionsMenu on mobile view', () => {
             appsEnabled: false,
             isSysAdmin: true,
             canOpenMarketplace: false,
+            pluginMenuItemComponents: [],
         };
 
         const wrapper = shallow(

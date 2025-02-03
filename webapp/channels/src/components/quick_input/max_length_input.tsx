@@ -1,9 +1,9 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {Fragment, FC, InputHTMLAttributes, forwardRef} from 'react';
-
 import classNames from 'classnames';
+import React, {Fragment, forwardRef} from 'react';
+import type {FC, InputHTMLAttributes} from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
     className: string;
@@ -25,7 +25,7 @@ const MaxLengthInput: FC<InputProps> = forwardRef<HTMLInputElement, InputProps>(
         });
 
         return (
-            <Fragment>
+            <>
                 <input
                     className={classes}
                     defaultValue={defaultValue}
@@ -38,7 +38,7 @@ const MaxLengthInput: FC<InputProps> = forwardRef<HTMLInputElement, InputProps>(
                         {excess}
                     </span>
                 )}
-            </Fragment>
+            </>
         );
     },
 );

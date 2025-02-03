@@ -1,12 +1,13 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {createSelector} from 'reselect';
-
-import {isPlugin} from 'mattermost-redux/utils/marketplace';
 import type {MarketplaceApp, MarketplacePlugin} from '@mattermost/types/marketplace';
 
-import {GlobalState} from 'types/store';
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
+import {isPlugin} from 'mattermost-redux/utils/marketplace';
+import {secureGetFromRecord} from 'mattermost-redux/utils/post_utils';
+
+import type {GlobalState} from 'types/store';
 
 export const getPlugins = (state: GlobalState): MarketplacePlugin[] => state.views.marketplace.plugins;
 
@@ -45,6 +46,6 @@ export const getApp = (state: GlobalState, id: string): MarketplaceApp | undefin
 
 export const getFilter = (state: GlobalState): string => state.views.marketplace.filter;
 
-export const getInstalling = (state: GlobalState, id: string): boolean => Boolean(state.views.marketplace.installing[id]);
+export const getInstalling = (state: GlobalState, id: string): boolean => Boolean(secureGetFromRecord(state.views.marketplace.installing, id));
 
-export const getError = (state: GlobalState, id: string): string => state.views.marketplace.errors[id];
+export const getError = (state: GlobalState, id: string): string | undefined => secureGetFromRecord(state.views.marketplace.errors, id);

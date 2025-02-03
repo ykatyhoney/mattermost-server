@@ -2,12 +2,12 @@
 // See LICENSE.txt for license information.
 
 import {shallow} from 'enzyme';
-
 import React from 'react';
 
 import {TestHelper} from 'utils/test_helper';
 
-import ChannelHeaderDropdown, {Props} from './channel_header_dropdown_items';
+import ChannelHeaderDropdown from './channel_header_dropdown_items';
+import type {Props} from './channel_header_dropdown_items';
 
 describe('components/ChannelHeaderDropdown', () => {
     const defaultProps = {
@@ -22,6 +22,7 @@ describe('components/ChannelHeaderDropdown', () => {
         penultimateViewedChannelName: 'test-channel',
         pluginMenuItems: [],
         isLicensedForLDAPGroups: false,
+        isChannelBookmarksEnabled: false,
     };
     test('should match snapshot with no plugin items', () => {
         const wrapper = shallow(<ChannelHeaderDropdown {...defaultProps}/>);
@@ -32,8 +33,8 @@ describe('components/ChannelHeaderDropdown', () => {
         const props: Props = {
             ...defaultProps,
             pluginMenuItems: [
-                {id: 'plugin-1', pluginId: 'playbooks', action: jest.fn(), text: 'plugin-1-text'},
-                {id: 'plugin-2', pluginId: 'playbooks', action: jest.fn(), text: 'plugin-2-text'},
+                {id: 'plugin-1', pluginId: 'playbooks', action: jest.fn(), text: 'plugin-1-text', shouldRender: () => true},
+                {id: 'plugin-2', pluginId: 'playbooks', action: jest.fn(), text: 'plugin-2-text', shouldRender: () => true},
             ],
         };
         const wrapper = shallow(<ChannelHeaderDropdown {...props}/>);

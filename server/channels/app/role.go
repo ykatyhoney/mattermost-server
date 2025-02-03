@@ -9,11 +9,13 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
 )
 
 func (a *App) GetRole(id string) (*model.Role, *model.AppError) {
@@ -86,6 +88,20 @@ func (a *App) GetRolesByNames(names []string) ([]*model.Role, *model.AppError) {
 	}
 
 	return roles, nil
+}
+
+func (a *App) DeleteRole(id string) (*model.Role, *model.AppError) {
+	role, err := a.Srv().Store().Role().Delete(id)
+	if err != nil {
+		var nfErr *store.ErrNotFound
+		switch {
+		case errors.As(err, &nfErr):
+			return nil, model.NewAppError("DeleteRole", "app.role.get.app_error", nil, "", http.StatusNotFound).Wrap(err)
+		default:
+			return nil, model.NewAppError("DeleteRole", "app.role.delete.app_error", nil, "", http.StatusInternalServerError).Wrap(err)
+		}
+	}
+	return role, nil
 }
 
 // mergeChannelHigherScopedPermissions updates the permissions based on the role type, whether the permission is
@@ -187,13 +203,13 @@ func (a *App) UpdateRole(role *model.Role) (*model.Role, *model.AppError) {
 
 	builtInRolesMinusChannelRoles := append(utils.RemoveStringsFromSlice(model.BuiltInSchemeManagedRoleIDs, builtInChannelRoles...), model.NewSystemRoleIDs...)
 
-	if utils.StringInSlice(savedRole.Name, builtInRolesMinusChannelRoles) {
+	if slices.Contains(builtInRolesMinusChannelRoles, savedRole.Name) {
 		return savedRole, nil
 	}
 
 	var roleRetrievalFunc func() ([]*model.Role, *model.AppError)
 
-	if utils.StringInSlice(savedRole.Name, builtInChannelRoles) {
+	if slices.Contains(builtInChannelRoles, savedRole.Name) {
 		roleRetrievalFunc = func() ([]*model.Role, *model.AppError) {
 			roles, nErr := a.Srv().Store().Role().AllChannelSchemeRoles()
 			if nErr != nil {
@@ -269,7 +285,7 @@ func (a *App) sendUpdatedRoleEvent(role *model.Role) *model.AppError {
 	return nil
 }
 
-func RemoveRoles(rolesToRemove []string, roles string) string {
+func removeRoles(rolesToRemove []string, roles string) string {
 	roleList := strings.Fields(roles)
 	newRoles := make([]string, 0)
 

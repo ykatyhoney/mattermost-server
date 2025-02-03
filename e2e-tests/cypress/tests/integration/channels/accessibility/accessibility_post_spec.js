@@ -18,7 +18,6 @@ describe('Verify Accessibility Support in Post', () => {
     let otherUser;
     let testTeam;
     let testChannel;
-    let emojiPickerEnabled;
 
     before(() => {
         cy.apiInitSetup().then(({team, channel, user}) => {
@@ -32,10 +31,6 @@ describe('Verify Accessibility Support in Post', () => {
                 cy.apiAddUserToTeam(testTeam.id, otherUser.id).then(() => {
                     cy.apiAddUserToChannel(testChannel.id, otherUser.id);
                 });
-            });
-
-            cy.apiGetConfig().then(({config}) => {
-                emojiPickerEnabled = config.ServiceSettings.EnableEmojiPicker;
             });
         });
     });
@@ -162,56 +157,47 @@ describe('Verify Accessibility Support in Post', () => {
         postMessages(testChannel, otherUser, 1);
 
         // # Shift focus to the last post
-        cy.get('#FormattingControl_bold').focus().tab({shift: true}).tab({shift: true}).type('{uparrow}{downarrow}');
-        cy.focused().tab();
+        cy.get('#FormattingControl_bold').focus().tab({shift: true}).tab({shift: true}).tab({shift: true}).tab({shift: true});
 
         cy.getLastPostId().then((postId) => {
             cy.get(`#post_${postId}`).within(() => {
                 // * Verify focus is on profile image
-                cy.get('.status-wrapper button').first().should('be.focused');
+                cy.get('button.status-wrapper').first().should('be.focused');
                 cy.focused().tab();
 
                 // * Verify focus is on the username
-                cy.get('button.user-popover').should('be.focused').and('have.attr', 'aria-label', otherUser.username);
+                cy.get('button.user-popover').should('be.focused');
                 cy.focused().tab();
 
                 // * Verify focus is on the time
                 cy.get(`#CENTER_time_${postId}`).should('be.focused');
                 cy.focused().tab();
 
-                // eslint-disable-next-line no-negated-condition
-                if (!emojiPickerEnabled) {
-                    // * Verify focus is on the actions button
-                    cy.get(`#CENTER_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'more');
+                for (let i = 0; i < 3; i++) {
+                    // * Verify focus is on the reactions button
+                    cy.get(`#recent_reaction_${i}`).should('have.class', 'emoticon--post-menu').and('have.attr', 'aria-label');
                     cy.focused().tab();
-                } else {
-                    for (let i = 0; i < 3; i++) {
-                        // * Verify focus is on the reactions button
-                        cy.get(`#recent_reaction_${i}`).should('have.class', 'emoticon--post-menu').and('have.attr', 'aria-label');
-                        cy.focused().tab();
-                    }
                 }
 
                 // * Verify focus is on the reactions button
-                cy.get(`#CENTER_reaction_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'add reaction');
+                cy.get(`#CENTER_reaction_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'Add Reaction');
                 cy.focused().tab();
 
                 // * Verify focus is on the save post button
-                cy.get(`#CENTER_flagIcon_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'save');
+                cy.get(`#CENTER_flagIcon_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'save message');
+                cy.focused().tab();
+
+                // * Verify focus is on the actions button
+                cy.get(`#CENTER_actions_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'actions');
                 cy.focused().tab();
 
                 // * Verify focus is on the comment button
                 cy.get(`#CENTER_commentIcon_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'reply');
                 cy.focused().tab();
 
-                if (emojiPickerEnabled) {
-                    // * Verify focus is on the more button
-                    cy.get(`#CENTER_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'More');
-                    cy.focused().tab();
-                }
-
-                // * Verify focus is on the post text
-                cy.get(`#postMessageText_${postId}`).should('be.focused').and('have.attr', 'aria-readonly', 'true');
+                // * Verify focus is on the more button
+                cy.get(`#CENTER_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'more');
+                cy.focused().tab();
             });
         });
     });
@@ -240,40 +226,32 @@ describe('Verify Accessibility Support in Post', () => {
         // * Verify reverse tab on RHS
         cy.getLastPostId().then((postId) => {
             cy.get(`#rhsPost_${postId}`).within(() => {
-                // * Verify focus is on the post text
-                cy.get(`#rhsPostMessageText_${postId}`).should('be.focused').and('have.attr', 'aria-readonly', 'true');
-                cy.focused().tab({shift: true});
-
-                if (emojiPickerEnabled) {
-                    // * Verify focus is on the actions button
-                    cy.get(`#RHS_COMMENT_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'More');
-                    cy.focused().tab({shift: true});
-                }
-
-                // * Verify focus is on the save icon
-                cy.get(`#RHS_COMMENT_flagIcon_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'save');
-                cy.focused().tab({shift: true});
-
-                // * Verify focus is on the reactions button
-                cy.get(`#RHS_COMMENT_reaction_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'add reaction');
-                cy.focused().tab({shift: true});
-
-                // eslint-disable-next-line no-negated-condition
-                if (!emojiPickerEnabled) {
-                    // * Verify focus is on the actions button
-                    cy.get(`#RHS_COMMENT_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'more');
-                    cy.focused().tab({shift: true});
-                } else {
-                    cy.get('#recent_reaction_0').should('have.class', 'emoticon--post-menu').and('have.attr', 'aria-label');
-                    cy.focused().tab({shift: true});
-                }
-
                 // * Verify focus is on the time
                 cy.get(`#RHS_COMMENT_time_${postId}`).should('be.focused');
                 cy.focused().tab({shift: true});
 
                 // * Verify focus is on the username
-                cy.get('button.user-popover').should('be.focused').and('have.attr', 'aria-label', otherUser.username);
+                cy.get('button.user-popover').should('be.focused');
+                cy.focused().tab().tab();
+
+                // * Verify focus is on most recent action
+                cy.get('#recent_reaction_0').should('have.class', 'emoticon--post-menu').and('have.attr', 'aria-label');
+                cy.focused().tab();
+
+                // * Verify focus is on the reactions button
+                cy.get(`#RHS_COMMENT_reaction_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'Add Reaction');
+                cy.focused().tab();
+
+                // * Verify focus is on the save icon
+                cy.get(`#RHS_COMMENT_flagIcon_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'save message');
+                cy.focused().tab();
+
+                // * Verify focus is on the actions button
+                cy.get(`#RHS_COMMENT_actions_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'actions');
+                cy.focused().tab();
+
+                // * Verify focus is on the more button
+                cy.get(`#RHS_COMMENT_button_${postId}`).should('be.focused').and('have.attr', 'aria-label', 'more');
                 cy.focused().tab({shift: true});
             });
         });
@@ -355,8 +333,9 @@ function verifyPostLabel(elementId, username, labelSuffix) {
     // * Verify reader reads out the post correctly
     cy.get('@lastPost').then((el) => {
         // # Get the post time
-        cy.wrap(el).find('time.post__time').invoke('text').then((time) => {
-            const expectedLabel = `At ${time} ${Cypress.dayjs().format('dddd, MMMM D')}, ${username} ${labelSuffix}`;
+        cy.wrap(el).find('time.post__time').invoke('attr', 'datetime').then((time) => {
+            const parsedTime = Cypress.dayjs(time);
+            const expectedLabel = `At ${parsedTime.format('h:mm A dddd, MMMM D')}, ${username} ${labelSuffix}`;
             cy.wrap(el).should('have.attr', 'aria-label', expectedLabel);
         });
     });

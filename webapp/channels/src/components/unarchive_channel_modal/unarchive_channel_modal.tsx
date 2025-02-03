@@ -5,11 +5,11 @@ import React from 'react';
 import {Modal} from 'react-bootstrap';
 import {FormattedMessage} from 'react-intl';
 
-import {ActionResult} from 'mattermost-redux/types/actions';
-import {Channel} from '@mattermost/types/channels';
+import type {Channel} from '@mattermost/types/channels';
+
+import type {ActionResult} from 'mattermost-redux/types/actions';
 
 import Constants from 'utils/constants';
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
 
 type Props = {
     onExited: () => void;
@@ -51,7 +51,7 @@ export default class UnarchiveChannelModal extends React.PureComponent<Props, St
                 show={this.state.show}
                 onHide={this.onHide}
                 onExited={this.props.onExited}
-                role='dialog'
+                role='none'
                 aria-labelledby='unarchiveChannelModalLabel'
                 id='unarchiveChannelModal'
             >
@@ -68,11 +68,12 @@ export default class UnarchiveChannelModal extends React.PureComponent<Props, St
                 </Modal.Header>
                 <Modal.Body>
                     <div className='alert alert-danger'>
-                        <FormattedMarkdownMessage
-                            id='unarchive_channel.viewArchived.question'
-                            defaultMessage={'Are you sure you wish to unarchive the **{display_name}** channel?'}
+                        <FormattedMessage
+                            id='unarchiveChannelModal.viewArchived.question'
+                            defaultMessage={'Are you sure you wish to unarchive the <b>{display_name}</b> channel?'}
                             values={{
                                 display_name: this.props.channel.display_name,
+                                b: (chunks: string) => <b>{chunks}</b>,
                             }}
                         />
                     </div>
@@ -80,7 +81,7 @@ export default class UnarchiveChannelModal extends React.PureComponent<Props, St
                 <Modal.Footer>
                     <button
                         type='button'
-                        className='btn btn-link'
+                        className='btn btn-tertiary'
                         onClick={this.onHide}
                     >
                         <FormattedMessage

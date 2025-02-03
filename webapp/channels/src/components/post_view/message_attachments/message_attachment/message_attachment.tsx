@@ -1,35 +1,38 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {CSSProperties} from 'react';
 import truncate from 'lodash/truncate';
+import React from 'react';
+import type {KeyboardEvent, MouseEvent, CSSProperties} from 'react';
 
-import {ActionResult} from 'mattermost-redux/types/actions';
-import {PostAction, PostActionOption} from '@mattermost/types/integration_actions';
-import {
+import type {PostAction, PostActionOption} from '@mattermost/types/integration_actions';
+import type {
     MessageAttachment as MessageAttachmentType,
-    MessageAttachmentField,
 } from '@mattermost/types/message_attachments';
-import {PostImage} from '@mattermost/types/posts';
+import type {PostImage} from '@mattermost/types/posts';
 
-import {isUrlSafe} from 'utils/url';
-import {Constants, ModalIdentifiers} from 'utils/constants';
-import * as Utils from 'utils/utils';
-import LinkOnlyRenderer from 'utils/markdown/link_only_renderer';
-import {TextFormattingOptions} from 'utils/text_formatting';
+import type {ActionResult} from 'mattermost-redux/types/actions';
+import {secureGetFromRecord} from 'mattermost-redux/utils/post_utils';
+
+import {trackEvent} from 'actions/telemetry_actions';
 
 import ExternalImage from 'components/external_image';
+import ExternalLink from 'components/external_link';
+import FilePreviewModal from 'components/file_preview_modal';
 import Markdown from 'components/markdown';
 import ShowMore from 'components/post_view/show_more';
 import SizeAwareImage from 'components/size_aware_image';
 
+import {Constants, ModalIdentifiers} from 'utils/constants';
+import LinkOnlyRenderer from 'utils/markdown/link_only_renderer';
+import type {TextFormattingOptions} from 'utils/text_formatting';
+import {isUrlSafe} from 'utils/url';
+import * as Utils from 'utils/utils';
+
+import type {ModalData} from 'types/actions';
+
 import ActionButton from '../action_button';
 import ActionMenu from '../action_menu';
-
-import {trackEvent} from 'actions/telemetry_actions';
-import FilePreviewModal from '../../../file_preview_modal';
-import {ModalData} from 'types/actions';
-import ExternalLink from 'components/external_link';
 
 type Props = {
 
@@ -96,14 +99,20 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
 
     handleHeightReceivedForThumbUrl = ({height}: {height: number}) => {
         const {attachment} = this.props;
-        if (!this.props.imagesMetadata || (this.props.imagesMetadata && !this.props.imagesMetadata[attachment.thumb_url])) {
+        if (!attachment.thumb_url) {
+            return;
+        }
+        if (!secureGetFromRecord(this.props.imagesMetadata, attachment.thumb_url)) {
             this.handleHeightReceived(height);
         }
     };
 
     handleHeightReceivedForImageUrl = ({height}: {height: number}) => {
         const {attachment} = this.props;
-        if (!this.props.imagesMetadata || (this.props.imagesMetadata && !this.props.imagesMetadata[attachment.image_url])) {
+        if (!attachment.image_url) {
+            return;
+        }
+        if (!secureGetFromRecord(this.props.imagesMetadata, attachment.image_url)) {
             this.handleHeightReceived(height);
         }
     };
@@ -229,9 +238,9 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
         let rowPos = 0;
         let lastWasLong = false;
         let nrTables = 0;
-        const markdown = {markdown: false, mentionHighlight: false};
+        const markdown = {markdown: false, mentionHighlight: false, atMentions: false};
 
-        fields.forEach((field: MessageAttachmentField, i: number) => {
+        fields.forEach((field, i) => {
             if (rowPos === 2 || !(field.short === true) || lastWasLong) {
                 fieldTables.push(
                     <table
@@ -309,14 +318,14 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
         );
     };
 
-    handleFormattedTextClick = (e: React.MouseEvent) => Utils.handleFormattedTextClick(e, this.props.currentRelativeTeamUrl);
+    handleFormattedTextClick = (e: MouseEvent) => Utils.handleFormattedTextClick(e, this.props.currentRelativeTeamUrl);
 
     getFileExtensionFromUrl = (url: string) => {
         const index = url.lastIndexOf('.');
         return index > 0 ? url.substring(index + 1) : null;
     };
 
-    showModal = (e: {preventDefault: () => void}, link: string) => {
+    showModal = (e: (KeyboardEvent<HTMLImageElement> | MouseEvent<HTMLElement>), link = '') => {
         e.preventDefault();
 
         const extension = this.getFileExtensionFromUrl(link);
@@ -361,7 +370,7 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
                     <ExternalImage
                         key={'attachment__author-icon'}
                         src={attachment.author_icon}
-                        imageMetadata={this.props.imagesMetadata && this.props.imagesMetadata[attachment.author_icon]}
+                        imageMetadata={secureGetFromRecord(this.props.imagesMetadata, attachment.author_icon)}
                     >
                         {(iconUrl) => (
                             <img
@@ -418,6 +427,7 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
                         <Markdown
                             message={attachment.title}
                             options={{
+                                atMentions: false,
                                 mentionHighlight: false,
                                 renderer: new LinkOnlyRenderer(),
                                 autolinkedUrlSchemes: [],
@@ -450,7 +460,7 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
 
         let image;
         if (attachment.image_url) {
-            const imageMetadata = this.props.imagesMetadata && this.props.imagesMetadata[attachment.image_url];
+            const imageMetadata = secureGetFromRecord(this.props.imagesMetadata, attachment.image_url);
 
             image = (
                 <div className='attachment__image-container'>
@@ -476,7 +486,7 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
         if (attachment.footer) {
             let footerIcon;
             if (attachment.footer_icon) {
-                const footerIconMetadata = this.props.imagesMetadata && this.props.imagesMetadata[attachment.footer_icon];
+                const footerIconMetadata = secureGetFromRecord(this.props.imagesMetadata, attachment.footer_icon);
 
                 footerIcon = (
                     <ExternalImage
@@ -506,7 +516,7 @@ export default class MessageAttachment extends React.PureComponent<Props, State>
 
         let thumb;
         if (attachment.thumb_url) {
-            const thumbMetadata = this.props.imagesMetadata && this.props.imagesMetadata[attachment.thumb_url];
+            const thumbMetadata = secureGetFromRecord(this.props.imagesMetadata, attachment.thumb_url);
 
             thumb = (
                 <div className='attachment__thumb-container'>

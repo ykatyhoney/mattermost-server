@@ -4,15 +4,15 @@
 import React from 'react';
 import {FormattedMessage, useIntl} from 'react-intl';
 
-import {CloudUsage, Limits} from '@mattermost/types/cloud';
-import {asGBString, inK} from 'utils/limits';
+import type {CloudUsage, Limits} from '@mattermost/types/cloud';
 
-import {Message} from 'utils/i18n';
+import type {Message} from 'utils/i18n';
+import {asGBString, inK} from 'utils/limits';
 
 import LimitLine from './limit_line';
 
 export function messageToElement(x: Message | React.ReactNode): React.ReactNode {
-    if (Object.prototype.hasOwnProperty.call(x, 'defaultMessage')) {
+    if (x && typeof x === 'object' && Object.hasOwn(x, 'defaultMessage')) {
         return (
             <FormattedMessage
                 id={(x as Message).id}

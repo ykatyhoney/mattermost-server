@@ -1,38 +1,31 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import path from 'node:path';
 import {expect} from '@playwright/test';
 
 import {PreferenceType} from '@mattermost/types/preferences';
 import testConfig from '@e2e-test.config';
+import {getFileDataFromAsset} from '@e2e-support/file';
 
 import {makeClient} from '.';
 import {getOnPremServerConfig} from './default_config';
 import {createRandomTeam} from './team';
 import {createRandomUser} from './user';
 
-const boardsUserConfigPatch = {
-    updatedFields: {
-        welcomePageViewed: '1',
-        onboardingTourStep: '999',
-        tourCategory: 'board',
-        version72MessageCanceled: 'true',
-    },
-};
-
 export async function initSetup({
     userPrefix = 'user',
     teamPrefix = {name: 'team', displayName: 'Team'},
     withDefaultProfileImage = true,
-    skipBoardsUserConfig = true,
 } = {}) {
     try {
         // Login the admin user via API
         const {adminClient, adminUser} = await getAdminClient();
+        if (!adminUser) {
+            throw new Error('Failed to setup admin: Admin user not found.');
+        }
         if (!adminClient) {
             throw new Error(
-                "Failed to setup admin: Check that you're able to access the server using the same admin credential."
+                "Failed to setup admin: Check that you're able to access the server using the same admin credential.",
             );
         }
 
@@ -52,20 +45,22 @@ export async function initSetup({
         const {client: userClient} = await makeClient(user);
 
         if (withDefaultProfileImage) {
-            // Set user profile image
-            const fullPath = path.join(path.resolve(__dirname), '../', 'asset/mattermost-icon_128x128.png');
-            await userClient.uploadProfileImageX(user.id, fullPath);
+            const {file} = getFileDataFromAsset('mattermost-icon_128x128.png', 'image/png');
+            await userClient.uploadProfileImage(user.id, file);
         }
 
         // Update user preference
         const preferences: PreferenceType[] = [
             {user_id: user.id, category: 'tutorial_step', name: user.id, value: '999'},
+            {
+                user_id: user.id,
+                category: 'drafts',
+                name: 'drafts_tour_tip_showed',
+                value: JSON.stringify({drafts_tour_tip_showed: true}),
+            },
+            {user_id: user.id, category: 'crt_thread_pane_step', name: user.id, value: '999'},
         ];
         await userClient.savePreferences(user.id, preferences);
-
-        if (skipBoardsUserConfig) {
-            await userClient.patchUserConfig(user.id, boardsUserConfigPatch);
-        }
 
         return {
             adminClient,
@@ -77,20 +72,20 @@ export async function initSetup({
             offTopicUrl: getUrl(team.name, 'off-topic'),
             townSquareUrl: getUrl(team.name, 'town-square'),
         };
-    } catch (err) {
-        // log an error for debugging
-        // eslint-disable-next-line no-console
-        console.log(err);
-        expect(err, 'Should not throw an error').toBeFalsy();
-        throw err;
+    } catch (error) {
+        expect(error, 'Should not throw an error').toBeFalsy();
+        throw error;
     }
 }
 
-export async function getAdminClient() {
-    const {client: adminClient, user: adminUser} = await makeClient({
-        username: testConfig.adminUsername,
-        password: testConfig.adminPassword,
-    });
+export async function getAdminClient(opts: {skipLog: boolean} = {skipLog: false}) {
+    const {client: adminClient, user: adminUser} = await makeClient(
+        {
+            username: testConfig.adminUsername,
+            password: testConfig.adminPassword,
+        },
+        opts,
+    );
 
     return {adminClient, adminUser};
 }

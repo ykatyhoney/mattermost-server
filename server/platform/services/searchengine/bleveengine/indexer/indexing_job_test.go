@@ -10,11 +10,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/jobs"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/testutils"
-	"github.com/mattermost/mattermost-server/v6/server/platform/services/searchengine/bleveengine"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/jobs"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/testutils"
+	"github.com/mattermost/mattermost/server/v8/platform/services/searchengine/bleveengine"
 )
 
 func TestBleveIndexer(t *testing.T) {
@@ -42,8 +43,8 @@ func TestBleveIndexer(t *testing.T) {
 
 		cfg := &model.Config{
 			BleveSettings: model.BleveSettings{
-				EnableIndexing: model.NewBool(true),
-				IndexDir:       model.NewString(tempDir),
+				EnableIndexing: model.NewPointer(true),
+				IndexDir:       model.NewPointer(tempDir),
 			},
 		}
 
@@ -61,6 +62,7 @@ func TestBleveIndexer(t *testing.T) {
 		worker := &BleveIndexerWorker{
 			jobServer: jobServer,
 			engine:    bleveEngine,
+			logger:    mlog.CreateConsoleTestLogger(t),
 		}
 
 		worker.DoJob(job)

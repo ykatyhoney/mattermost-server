@@ -5,11 +5,14 @@ import React, {useState} from 'react';
 import {Modal} from 'react-bootstrap';
 import {useDispatch, useSelector} from 'react-redux';
 
-import {closeModal} from 'actions/views/modals';
-import {ModalIdentifiers} from 'utils/constants';
-import {isModalOpen} from 'selectors/views/modals';
-import {GlobalState} from 'types/store';
 import {isCurrentLicenseCloud} from 'mattermost-redux/selectors/entities/cloud';
+
+import {closeModal} from 'actions/views/modals';
+import {isModalOpen} from 'selectors/views/modals';
+
+import {ModalIdentifiers} from 'utils/constants';
+
+import type {GlobalState} from 'types/store';
 
 import Content from './content';
 import SelfHostedContent from './self_hosted_content';
@@ -61,7 +64,7 @@ function PricingModal(props: Props) {
             data-testid='pricingModal'
             dialogClassName='a11y__modal'
             onHide={onHide}
-            role='dialog'
+            role='none'
             aria-modal='true'
             aria-labelledby='pricing_modal_title'
         >

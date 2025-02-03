@@ -4,18 +4,20 @@
 package slackimport
 
 import (
+	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
 )
 
 func TestSlackConvertTimeStamp(t *testing.T) {
@@ -197,6 +199,8 @@ func TestSlackParseMultipleAttachments(t *testing.T) {
 }
 
 func TestSlackSanitiseChannelProperties(t *testing.T) {
+	rctx := request.TestContext(t)
+
 	c1 := model.Channel{
 		DisplayName: "display-name",
 		Name:        "name",
@@ -204,7 +208,7 @@ func TestSlackSanitiseChannelProperties(t *testing.T) {
 		Header:      "The channel header",
 	}
 
-	c1s := slackSanitiseChannelProperties(c1)
+	c1s := slackSanitiseChannelProperties(rctx, c1)
 	assert.Equal(t, c1, c1s)
 
 	c2 := model.Channel{
@@ -214,7 +218,7 @@ func TestSlackSanitiseChannelProperties(t *testing.T) {
 		Header:      strings.Repeat("0123456789", 120),
 	}
 
-	c2s := slackSanitiseChannelProperties(c2)
+	c2s := slackSanitiseChannelProperties(rctx, c2)
 	assert.Equal(t, model.Channel{
 		DisplayName: strings.Repeat("abcdefghij", 6) + "abcd",
 		Name:        strings.Repeat("abcdefghij", 6) + "abcd",
@@ -339,14 +343,13 @@ func TestOldImportChannel(t *testing.T) {
 	store := &mocks.Store{}
 	config := &model.Config{}
 	config.SetDefaults()
-	ctx := request.EmptyContext(nil)
-	ctx.SetLogger(mlog.CreateConsoleTestLogger(true, mlog.LvlDebug))
+	rctx := request.TestContext(t)
 
 	t.Run("No panic on direct channel", func(t *testing.T) {
 		// ch := th.CreateDmChannel(u1)
 		ch := &model.Channel{
 			Type: model.ChannelTypeDirect,
-			Name: "test-channel",
+			Name: model.GetDMNameFromIds(u1.Id, u2.Id),
 		}
 		users := map[string]*model.User{
 			u2.Id: u2,
@@ -360,13 +363,13 @@ func TestOldImportChannel(t *testing.T) {
 		actions := Actions{}
 
 		importer := New(store, actions, config)
-		_ = importer.oldImportChannel(ctx, ch, sCh, users)
+		_ = importer.oldImportChannel(rctx, ch, sCh, users)
 	})
 
 	t.Run("No panic on direct channel with 1 member", func(t *testing.T) {
 		ch := &model.Channel{
 			Type: model.ChannelTypeDirect,
-			Name: "test-channel",
+			Name: model.GetDMNameFromIds(u1.Id, u1.Id),
 		}
 		users := map[string]*model.User{
 			u1.Id: u1,
@@ -380,7 +383,7 @@ func TestOldImportChannel(t *testing.T) {
 		actions := Actions{}
 
 		importer := New(store, actions, config)
-		_ = importer.oldImportChannel(ctx, ch, sCh, users)
+		_ = importer.oldImportChannel(rctx, ch, sCh, users)
 	})
 
 	t.Run("No panic on group channel", func(t *testing.T) {
@@ -399,6 +402,60 @@ func TestOldImportChannel(t *testing.T) {
 		actions := Actions{}
 
 		importer := New(store, actions, config)
-		_ = importer.oldImportChannel(ctx, ch, sCh, users)
+		_ = importer.oldImportChannel(rctx, ch, sCh, users)
+	})
+}
+
+func TestSlackUploadFile(t *testing.T) {
+	store := &mocks.Store{}
+	config := &model.Config{}
+	config.SetDefaults()
+	defaultLimit := *config.FileSettings.MaxFileSize
+
+	rctx := request.TestContext(t)
+
+	sf := &slackFile{
+		Id:    "testfile",
+		Title: "test-file",
+	}
+
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+	writer, err := zipWriter.Create("testfile")
+	require.NoError(t, err)
+
+	_, err = writer.Write([]byte(strings.Repeat("a", 100)))
+	require.NoError(t, err)
+
+	err = zipWriter.Close()
+	require.NoError(t, err)
+
+	zipReader, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	require.NoError(t, err)
+
+	uploads := map[string]*zip.File{
+		"testfile": zipReader.File[0],
+	}
+
+	t.Run("Should not fail when file is in limits", func(t *testing.T) {
+		importer := New(store, Actions{
+			DoUploadFile: func(_ time.Time, _, _, _, _ string, _ []byte) (*model.FileInfo, *model.AppError) {
+				return &model.FileInfo{}, nil
+			},
+		}, config)
+		_, ok := importer.slackUploadFile(rctx, sf, uploads, "team-id", "channel-id", "user-id", time.Now().String())
+		require.True(t, ok)
+	})
+
+	t.Run("Should fail when file size exceeded", func(t *testing.T) {
+		defer func() {
+			config.FileSettings.MaxFileSize = model.NewPointer(defaultLimit)
+		}()
+
+		config.FileSettings.MaxFileSize = model.NewPointer(int64(10))
+
+		importer := New(store, Actions{}, config)
+		_, ok := importer.slackUploadFile(rctx, sf, uploads, "team-id", "channel-id", "user-id", time.Now().String())
+		require.False(t, ok)
 	})
 }

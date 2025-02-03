@@ -4,8 +4,8 @@
 package app
 
 import (
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/platform"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/app/platform"
 )
 
 func (a *App) TotalWebsocketConnections() int {
@@ -14,16 +14,6 @@ func (a *App) TotalWebsocketConnections() int {
 
 func (a *App) GetHubForUserId(userID string) *platform.Hub {
 	return a.Srv().Platform().GetHubForUserId(userID)
-}
-
-// HubRegister registers a connection to a hub.
-func (a *App) HubRegister(webConn *platform.WebConn) {
-	a.Srv().Platform().HubRegister(webConn)
-}
-
-// HubUnregister unregisters a connection from a hub.
-func (a *App) HubUnregister(webConn *platform.WebConn) {
-	a.Srv().Platform().HubUnregister(webConn)
 }
 
 func (a *App) Publish(message *model.WebSocketEvent) {
@@ -62,8 +52,4 @@ func (a *App) UpdateWebConnUserActivity(session model.Session, activityAt int64)
 // SessionIsRegistered determines if a specific session has been registered
 func (a *App) SessionIsRegistered(session model.Session) bool {
 	return a.Srv().Platform().SessionIsRegistered(session)
-}
-
-func (a *App) CheckWebConn(userID, connectionID string) *platform.CheckConnResult {
-	return a.Srv().Platform().CheckWebConn(userID, connectionID)
 }

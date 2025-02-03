@@ -1,37 +1,37 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ReactNode} from 'react';
-import {FormattedMessage} from 'react-intl';
+import React from 'react';
+import type {ReactNode} from 'react';
+import {FormattedMessage, useIntl} from 'react-intl';
 
-import Constants, {Locations} from 'utils/constants';
-import {fromAutoResponder, isFromWebhook} from 'utils/post_utils';
+import type {Post} from '@mattermost/types/posts';
 
-import Tag from 'components/widgets/tag/tag';
-import BotTag from 'components/widgets/tag/bot_tag';
-import UserProfile from 'components/user_profile';
+import {ensureString} from 'mattermost-redux/utils/post_utils';
+
 import PostHeaderCustomStatus from 'components/post_view/post_header_custom_status/post_header_custom_status';
+import UserProfile from 'components/user_profile';
+import BotTag from 'components/widgets/tag/bot_tag';
+import Tag from 'components/widgets/tag/tag';
 
-import {Post} from '@mattermost/types/posts';
+import {fromAutoResponder, isFromWebhook} from 'utils/post_utils';
 
 type Props = {
     post: Post;
     compactDisplay?: boolean;
-    currentUserId: string;
     colorizeUsernames?: boolean;
     enablePostUsernameOverride?: boolean;
     isConsecutivePost?: boolean;
     isBot: boolean;
     isSystemMessage: boolean;
     isMobileView: boolean;
-    location: keyof typeof Locations;
 };
 
 const PostUserProfile = (props: Props): JSX.Element | null => {
+    const intl = useIntl();
     const {post, compactDisplay, isMobileView, isConsecutivePost, enablePostUsernameOverride, isBot, isSystemMessage, colorizeUsernames} = props;
     const isFromAutoResponder = fromAutoResponder(post);
     const colorize = compactDisplay && colorizeUsernames;
-    const isRHS = props.location === Locations.RHS_COMMENT || props.location === Locations.RHS_ROOT || props.location === Locations.SEARCH;
 
     let userProfile: ReactNode = null;
     let botIndicator = null;
@@ -54,8 +54,6 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
             <UserProfile
                 userId={post.user_id}
                 channelId={post.channel_id}
-                isRHS={isRHS}
-                hasMention={true}
                 colorize={colorize}
             />
         );
@@ -66,8 +64,6 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
             <UserProfile
                 userId={post.user_id}
                 channelId={post.channel_id}
-                isRHS={isRHS}
-                hasMention={true}
                 colorize={colorize}
             />
         );
@@ -76,14 +72,15 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
             <UserProfile
                 userId={post.user_id}
                 channelId={post.channel_id}
-                isRHS={isRHS}
-                hasMention={true}
                 colorize={colorize}
             />
         );
 
         if (isFromWebhook(post)) {
-            const overwriteName = post.props.override_username && enablePostUsernameOverride ? post.props.override_username : undefined;
+            const propOverrideName = ensureString(post.props.override_username);
+            const overwriteName = propOverrideName && enablePostUsernameOverride ? propOverrideName : undefined;
+            const propOverrideIcon = ensureString(post.props.override_icon_url);
+            const overwriteIcon = propOverrideIcon || undefined;
             userProfile = (
                 <UserProfile
                     userId={post.user_id}
@@ -91,11 +88,15 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
                     hideStatus={true}
                     overwriteName={overwriteName}
                     colorize={colorize}
-                    overwriteIcon={post.props.override_icon_url || undefined}
+                    overwriteIcon={overwriteIcon}
                 />
             );
 
-            botIndicator = (<BotTag/>);
+            // user profile component checks and add bot tag in case webhook is from bot account, but if webhook is from user account we need this.
+
+            if (!isBot) {
+                botIndicator = (<BotTag/>);
+            }
         } else if (isFromAutoResponder) {
             userProfile = (
                 <span className='auto-responder'>
@@ -103,8 +104,6 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
                         userId={post.user_id}
                         channelId={post.channel_id}
                         hideStatus={true}
-                        isRHS={isRHS}
-                        hasMention={true}
                         colorize={colorize}
                     />
                 </span>
@@ -131,14 +130,11 @@ const PostUserProfile = (props: Props): JSX.Element | null => {
         } else if (isSystemMessage) {
             userProfile = (
                 <UserProfile
-                    overwriteName={
-                        <FormattedMessage
-                            id='post_info.system'
-                            defaultMessage='System'
-                        />
-                    }
+                    overwriteName={intl.formatMessage({
+                        id: 'post_info.system',
+                        defaultMessage: 'System',
+                    })}
                     userId={post.user_id}
-                    overwriteImage={Constants.SYSTEM_MESSAGE_PROFILE_IMAGE}
                     disablePopover={true}
                     channelId={post.channel_id}
                     colorize={colorize}

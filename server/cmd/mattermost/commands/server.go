@@ -15,14 +15,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/mattermost/mattermost-server/v6/server/channels/api4"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/manualtesting"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
-	"github.com/mattermost/mattermost-server/v6/server/channels/web"
-	"github.com/mattermost/mattermost-server/v6/server/channels/wsapi"
-	"github.com/mattermost/mattermost-server/v6/server/config"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/api4"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
+	"github.com/mattermost/mattermost/server/v8/channels/web"
+	"github.com/mattermost/mattermost/server/v8/channels/wsapi"
+	"github.com/mattermost/mattermost/server/v8/config"
 )
 
 var serverCmd = &cobra.Command{
@@ -93,11 +92,12 @@ func runServer(configStore *config.Store, interruptChan chan os.Signal) error {
 		}
 	}()
 
-	api, err := api4.Init(server)
+	_, err = api4.Init(server)
 	if err != nil {
 		mlog.Error(err.Error())
 		return err
 	}
+
 	wsapi.Init(server)
 	web.New(server)
 
@@ -107,13 +107,12 @@ func runServer(configStore *config.Store, interruptChan chan os.Signal) error {
 		return err
 	}
 
-	// If we allow testing then listen for manual testing URL hits
-	if *server.Config().ServiceSettings.EnableTesting {
-		manualtesting.Init(api)
-	}
-
 	notifyReady()
 
+	// Wiping off any signal handlers set before.
+	// This may come from intermediary signal handlers requiring to clean
+	// up resources before server.Start can finish.
+	signal.Reset(syscall.SIGINT, syscall.SIGTERM)
 	// wait for kill signal before attempting to gracefully shutdown
 	// the running service
 	signal.Notify(interruptChan, syscall.SIGINT, syscall.SIGTERM)

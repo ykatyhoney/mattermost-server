@@ -6,12 +6,12 @@ package api4
 import (
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/audit"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/audit"
 )
 
 func (api *API) InitBleve() {
-	api.BaseRoutes.Bleve.Handle("/purge_indexes", api.APISessionRequired(purgeBleveIndexes)).Methods("POST")
+	api.BaseRoutes.Bleve.Handle("/purge_indexes", api.APISessionRequired(purgeBleveIndexes)).Methods(http.MethodPost)
 }
 
 func purgeBleveIndexes(c *Context, w http.ResponseWriter, r *http.Request) {
@@ -28,7 +28,7 @@ func purgeBleveIndexes(c *Context, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.App.PurgeBleveIndexes(); err != nil {
+	if err := c.App.PurgeBleveIndexes(c.AppContext); err != nil {
 		c.Err = err
 		return
 	}

@@ -2,24 +2,26 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
+import {injectIntl} from 'react-intl';
+import type {IntlShape} from 'react-intl';
 
-import {injectIntl, IntlShape} from 'react-intl';
+import type {AppBinding} from '@mattermost/types/apps';
+import type {Channel, ChannelMembership} from '@mattermost/types/channels';
 
 import {AppCallResponseTypes} from 'mattermost-redux/constants/apps';
-import {AppBinding} from '@mattermost/types/apps';
-import {Channel, ChannelMembership} from '@mattermost/types/channels';
-import {Theme} from 'mattermost-redux/selectors/entities/preferences';
+import type {Theme} from 'mattermost-redux/selectors/entities/preferences';
 
-import {PluginComponent} from 'types/store/plugins';
 import {createCallContext} from 'utils/apps';
-import {HandleBindingClick, OpenAppsModal, PostEphemeralCallResponseForChannel} from 'types/apps';
+
+import type {HandleBindingClick, OpenAppsModal, PostEphemeralCallResponseForChannel} from 'types/apps';
+import type {MobileChannelHeaderButtonAction} from 'types/store/plugins';
 
 type Props = {
 
     /*
      * Components or actions to add as channel header buttons
      */
-    components?: PluginComponent[];
+    components?: MobileChannelHeaderButtonAction[];
 
     /*
      * Set to true if the plug is in the dropdown
@@ -82,7 +84,7 @@ class MobileChannelHeaderPlug extends React.PureComponent<Props> {
             </li>
         );
     };
-    createButton = (plug: PluginComponent) => {
+    createButton = (plug: MobileChannelHeaderButtonAction) => {
         const onClick = () => this.fireAction(plug);
 
         if (this.props.isDropdown) {
@@ -117,7 +119,7 @@ class MobileChannelHeaderPlug extends React.PureComponent<Props> {
         );
     };
 
-    createList(plugs: PluginComponent[]) {
+    createList(plugs: MobileChannelHeaderButtonAction[]) {
         return plugs.map(this.createButton);
     }
 
@@ -125,7 +127,7 @@ class MobileChannelHeaderPlug extends React.PureComponent<Props> {
         return bindings.map(this.createAppButton);
     }
 
-    fireAction(plug: PluginComponent) {
+    fireAction(plug: MobileChannelHeaderButtonAction) {
         return plug.action?.(this.props.channel, this.props.channelMember);
     }
 

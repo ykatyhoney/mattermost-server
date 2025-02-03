@@ -1,9 +1,9 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Timezone} from 'timezones.json';
+import type {Timezone} from 'timezones.json';
 
-import {UserTimezone} from '@mattermost/types/users';
+import type {UserTimezone} from '@mattermost/types/users';
 
 export function getUserCurrentTimezone(userTimezone?: UserTimezone): string {
     if (!userTimezone) {
@@ -21,9 +21,9 @@ export function getUserCurrentTimezone(userTimezone?: UserTimezone): string {
     }
 
     if (useAutomatic) {
-        return automaticTimezone;
+        return automaticTimezone || 'UTC';
     }
-    return manualTimezone;
+    return manualTimezone || 'UTC';
 }
 
 export function getTimezoneRegion(timezone: string): string {

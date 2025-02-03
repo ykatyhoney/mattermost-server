@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/storetest/mocks"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest"
+	"github.com/mattermost/mattermost/server/v8/channels/store/storetest/mocks"
 )
 
 func TestPostStore(t *testing.T) {
@@ -27,11 +28,12 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 		Time:             fakeLastTime,
 		SkipFetchThreads: false,
 	}
+	logger := mlog.CreateConsoleTestLogger(t)
 
 	t.Run("GetEtag: first call not cached, second cached and returning same data", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		expectedResult := fmt.Sprintf("%v.%v", model.CurrentVersion, fakeLastTime)
@@ -46,9 +48,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetEtag: first call not cached, second force no cached", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetEtag(channelId, true, false)
@@ -58,9 +60,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetEtag: first call not cached, invalidate, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetEtag(channelId, true, false)
@@ -71,9 +73,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetEtag: first call not cached, clear caches, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetEtag(channelId, true, false)
@@ -84,9 +86,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetPostsSince: first call not cached, second cached and returning same data", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		expectedResult := model.NewPostList()
@@ -103,9 +105,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetPostsSince: first call not cached, second force no cached", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetPostsSince(fakeOptions, true, map[string]bool{})
@@ -115,9 +117,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetPostsSince: first call not cached, invalidate, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetPostsSince(fakeOptions, true, map[string]bool{})
@@ -128,9 +130,9 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 	})
 
 	t.Run("GetPostsSince: first call not cached, clear caches, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		cachedStore.Post().GetPostsSince(fakeOptions, true, map[string]bool{})
@@ -144,11 +146,12 @@ func TestPostStoreLastPostTimeCache(t *testing.T) {
 func TestPostStoreCache(t *testing.T) {
 	fakePosts := &model.PostList{}
 	fakeOptions := model.GetPostsOptions{ChannelId: "123", PerPage: 30}
+	logger := mlog.CreateConsoleTestLogger(t)
 
 	t.Run("first call not cached, second cached and returning same data", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotPosts, err := cachedStore.Post().GetPosts(fakeOptions, true, map[string]bool{})
@@ -161,9 +164,9 @@ func TestPostStoreCache(t *testing.T) {
 	})
 
 	t.Run("first call not cached, second force not cached", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotPosts, err := cachedStore.Post().GetPosts(fakeOptions, true, map[string]bool{})
@@ -176,9 +179,9 @@ func TestPostStoreCache(t *testing.T) {
 	})
 
 	t.Run("first call not cached, invalidate, and then not cached again", func(t *testing.T) {
-		mockStore := getMockStore()
+		mockStore := getMockStore(t)
 		mockCacheProvider := getMockCacheProvider()
-		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider)
+		cachedStore, err := NewLocalCacheLayer(mockStore, nil, nil, mockCacheProvider, logger)
 		require.NoError(t, err)
 
 		gotPosts, err := cachedStore.Post().GetPosts(fakeOptions, true, map[string]bool{})
@@ -190,6 +193,5 @@ func TestPostStoreCache(t *testing.T) {
 
 		_, _ = cachedStore.Post().GetPosts(fakeOptions, true, map[string]bool{})
 		mockStore.Post().(*mocks.PostStore).AssertNumberOfCalls(t, "GetPosts", 1)
-
 	})
 }

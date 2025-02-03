@@ -1,16 +1,15 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import * as React from 'react';
+import React, {memo} from 'react';
 import {FormattedMessage} from 'react-intl';
 
-import {ClientLicense} from '@mattermost/types/config';
+import type {ClientLicense} from '@mattermost/types/config';
+
+import ContactUsButton from 'components/announcement_bar/contact_sales/contact_us';
+import SetupSystemSvg from 'components/common/svg_images_components/setup_system';
 
 import {isEnterpriseOrE20License} from 'utils/license_utils';
-import WomanUpArrowsAndCloudsSvg from 'components/common/svg_images_components/woman_up_arrows_and_clouds_svg';
-import ContactUsButton from 'components/announcement_bar/contact_sales/contact_us';
-import WomanWithCardSvg from 'components/common/svg_images_components/woman_with_card_svg';
-import TwoPeopleChattingSvg from 'components/common/svg_images_components/two_people_chatting_svg';
 
 export interface EnterpriseEditionProps {
     isTrialLicense: boolean;
@@ -85,26 +84,13 @@ const EnterpriseEditionRightPanel = ({
     };
 
     const svgImage = () => {
-        if (isTrialLicense) {
-            return (
-                <WomanWithCardSvg
-                    width={200}
-                    height={200}
-                />
-            );
-        }
         if (isEnterpriseOrE20) {
-            return (
-                <TwoPeopleChattingSvg
-                    width={200}
-                    height={200}
-                />
-            );
+            return null; //No image
         }
         return (
-            <WomanUpArrowsAndCloudsSvg
-                width={200}
-                height={200}
+            <SetupSystemSvg
+                width={197}
+                height={120}
             />
         );
     };
@@ -160,4 +146,4 @@ const EnterpriseEditionRightPanel = ({
     );
 };
 
-export default React.memo(EnterpriseEditionRightPanel);
+export default memo(EnterpriseEditionRightPanel);

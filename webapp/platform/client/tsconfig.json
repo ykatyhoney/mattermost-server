@@ -2,7 +2,7 @@
     "compilerOptions": {
         "module": "commonjs",
         "moduleResolution": "node",
-        "target": "es6",
+        "target": "es2022",
         "declaration": true,
         "strict": true,
         "resolveJsonModule": true,
@@ -12,13 +12,10 @@
         "jsx": "react",
         "outDir": "./lib",
         "rootDir": "./src",
-        "composite": true
+        "composite": true,
     },
     "include": [
         "./src/**/*"
-    ],
-    "exclude": [
-        "**/*.test.*"
     ],
     "references": [
         {"path": "../types"}

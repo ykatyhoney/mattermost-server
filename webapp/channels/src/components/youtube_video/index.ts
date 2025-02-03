@@ -7,7 +7,7 @@ import {getCurrentChannelId} from 'mattermost-redux/selectors/entities/channels'
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
 import {getOpenGraphMetadataForUrl} from 'mattermost-redux/selectors/entities/posts';
 
-import {GlobalState} from 'types/store';
+import type {GlobalState} from 'types/store';
 
 import YoutubeVideo from './youtube_video';
 
@@ -24,6 +24,7 @@ function mapStateToProps(state: GlobalState, ownProps: OwnProps) {
         googleDeveloperKey: config.GoogleDeveloperKey,
         hasImageProxy: config.HasImageProxy === 'true',
         metadata: getOpenGraphMetadataForUrl(state, ownProps.postId, ownProps.link),
+        youtubeReferrerPolicy: config.YoutubeReferrerPolicy === 'true',
     };
 }
 

@@ -3,12 +3,14 @@
 
 import {connect} from 'react-redux';
 
-import {getUser} from 'mattermost-redux/selectors/entities/users';
+import type {Channel} from '@mattermost/types/channels';
+
 import {makeGetGmChannelMemberCount} from 'mattermost-redux/selectors/entities/channels';
+import {getUser} from 'mattermost-redux/selectors/entities/users';
 import {getUserIdFromChannelName} from 'mattermost-redux/utils/channel_utils';
+
 import {Constants} from 'utils/constants';
 
-import type {Channel} from '@mattermost/types/channels';
 import type {GlobalState} from 'types/store';
 
 import DraftTitle from './draft_title';
@@ -23,7 +25,6 @@ function makeMapStateToProps() {
     return (state: GlobalState, ownProps: OwnProps) => {
         const {channel, userId} = ownProps;
 
-        const channelName = channel.display_name;
         let teammateId;
         let teammate;
         let membersCount;
@@ -38,8 +39,7 @@ function makeMapStateToProps() {
         }
 
         return {
-            channelName,
-            channelType: channel.type,
+            channel,
             membersCount,
             selfDraft: teammateId === userId,
             teammate,

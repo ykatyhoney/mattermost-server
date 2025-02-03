@@ -4,19 +4,20 @@
 import React from 'react';
 import {FormattedMessage} from 'react-intl';
 
-import {localizeMessage} from 'utils/utils';
-import Constants from 'utils/constants';
+import type {Channel} from '@mattermost/types/channels';
+import type {OutgoingWebhook} from '@mattermost/types/integrations';
+import type {Team} from '@mattermost/types/teams';
+import type {UserProfile} from '@mattermost/types/users';
+import type {IDMappedObjects} from '@mattermost/types/utilities';
+
+import type {ActionResult} from 'mattermost-redux/types/actions';
 
 import BackstageList from 'components/backstage/components/backstage_list';
-import InstalledOutgoingWebhook, {matchesFilter} from 'components/integrations/installed_outgoing_webhook';
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
-
-import {UserProfile} from '@mattermost/types/users';
-import {Team} from '@mattermost/types/teams';
-import {OutgoingWebhook} from '@mattermost/types/integrations';
-import {IDMappedObjects} from '@mattermost/types/utilities';
-import {Channel} from '@mattermost/types/channels';
 import ExternalLink from 'components/external_link';
+import InstalledOutgoingWebhook, {matchesFilter} from 'components/integrations/installed_outgoing_webhook';
+
+import {Constants, DeveloperLinks} from 'utils/constants';
+import {localizeMessage} from 'utils/utils';
 
 export type Props = {
 
@@ -60,17 +61,17 @@ export type Props = {
         /**
         * The function to call for removing outgoingWebhook
         */
-        removeOutgoingHook: (hookId: string) => Promise<void>;
+        removeOutgoingHook: (hookId: string) => Promise<ActionResult>;
 
         /**
         * The function to call for outgoingWebhook List and for the status of api
         */
-        loadOutgoingHooksAndProfilesForTeam: (teamId: string, page: number, perPage: number) => Promise<void>;
+        loadOutgoingHooksAndProfilesForTeam: (teamId: string, page: number, perPage: number) => Promise<ActionResult>;
 
         /**
         * The function to call for regeneration of webhook token
         */
-        regenOutgoingHookToken: (hookId: string) => Promise<void>;
+        regenOutgoingHookToken: (hookId: string) => Promise<ActionResult>;
     };
 
     /**
@@ -97,7 +98,7 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
             this.props.actions.loadOutgoingHooksAndProfilesForTeam(
                 this.props.teamId,
                 Constants.Integrations.START_PAGE_NUM,
-                parseInt(Constants.Integrations.PAGE_SIZE, 10),
+                Constants.Integrations.PAGE_SIZE,
             ).then(
                 () => this.setState({loading: false}),
             );
@@ -119,7 +120,7 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
             if (channelA) {
                 displayNameA = channelA.display_name;
             } else {
-                displayNameA = localizeMessage('installed_outgoing_webhooks.unknown_channel', 'A Private Webhook');
+                displayNameA = localizeMessage({id: 'installed_outgoing_webhooks.unknown_channel', defaultMessage: 'A Private Webhook'});
             }
         }
 
@@ -129,7 +130,7 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
             if (channelB) {
                 displayNameB = channelB.display_name;
             } else {
-                displayNameB = localizeMessage('installed_outgoing_webhooks.unknown_channel', 'A Private Webhook');
+                displayNameB = localizeMessage({id: 'installed_outgoing_webhooks.unknown_channel', defaultMessage: 'A Private Webhook'});
             }
         }
         return displayNameA.localeCompare(displayNameB);
@@ -183,9 +184,12 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
                     />
                 }
                 emptyTextSearch={
-                    <FormattedMarkdownMessage
-                        id='installed_outgoing_webhooks.emptySearch'
-                        defaultMessage='No outgoing webhooks match {searchTerm}'
+                    <FormattedMessage
+                        id='installed_outgoing_webhooks.search.empty'
+                        defaultMessage='No outgoing webhooks match <b>{searchTerm}</b>'
+                        values={{
+                            b: (chunks: string) => <b>{chunks}</b>,
+                        }}
                     />
                 }
                 helpText={
@@ -195,7 +199,7 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
                         values={{
                             buildYourOwn: (
                                 <ExternalLink
-                                    href='https://developers.mattermost.com/integrate/admin-guide/admin-webhooks-outgoing/'
+                                    href={DeveloperLinks.SETUP_OUTGOING_WEBHOOKS}
                                     location='installed_outgoing_webhooks'
                                 >
                                     <FormattedMessage
@@ -218,10 +222,10 @@ export default class InstalledOutgoingWebhooks extends React.PureComponent<Props
                         }}
                     />
                 }
-                searchPlaceholder={localizeMessage(
-                    'installed_outgoing_webhooks.search',
-                    'Search Outgoing Webhooks',
-                )}
+                searchPlaceholder={localizeMessage({
+                    id: 'installed_outgoing_webhooks.search',
+                    defaultMessage: 'Search Outgoing Webhooks',
+                })}
                 loading={this.state.loading}
             >
                 {(filter: string) => {

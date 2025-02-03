@@ -1,26 +1,25 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ReactNode} from 'react';
+import partition from 'lodash/partition';
+import React from 'react';
 import {useSelector} from 'react-redux';
 
-import {partition} from 'lodash';
-
-import {useCurrentProduct, useCurrentProductId, inScope} from 'utils/products';
-
-import {getAppBarAppBindings} from 'mattermost-redux/selectors/entities/apps';
-import {getAppBarPluginComponents, getChannelHeaderPluginComponents, shouldShowAppBar} from 'selectors/plugins';
-import {suitePluginIds} from 'utils/constants';
+import type {GlobalState} from '@mattermost/types/store';
 
 import {Permissions} from 'mattermost-redux/constants';
+import {getAppBarAppBindings} from 'mattermost-redux/selectors/entities/apps';
 import {isMarketplaceEnabled} from 'mattermost-redux/selectors/entities/general';
 import {haveICurrentTeamPermission} from 'mattermost-redux/selectors/entities/roles';
 
-import {GlobalState} from '@mattermost/types/store';
+import {getAppBarPluginComponents, getChannelHeaderPluginComponents, shouldShowAppBar} from 'selectors/plugins';
 
-import AppBarPluginComponent, {isAppBarPluginComponent} from './app_bar_plugin_component';
+import {suitePluginIds} from 'utils/constants';
+import {useCurrentProduct, useCurrentProductId, inScope} from 'utils/products';
+
 import AppBarBinding, {isAppBinding} from './app_bar_binding';
 import AppBarMarketplace from './app_bar_marketplace';
+import AppBarPluginComponent, {isAppBarComponent} from './app_bar_plugin_component';
 
 import './app_bar.scss';
 
@@ -43,13 +42,13 @@ export default function AppBar() {
         return null;
     }
 
-    const coreProductsPluginIds = [suitePluginIds.boards, suitePluginIds.focalboard, suitePluginIds.playbooks];
+    const coreProductsPluginIds = [suitePluginIds.focalboard, suitePluginIds.playbooks];
 
     const [coreProductComponents, pluginComponents] = partition(appBarPluginComponents, ({pluginId}) => {
         return coreProductsPluginIds.includes(pluginId);
     });
 
-    const items: ReactNode[] = [
+    const items = [
         ...coreProductComponents,
         getDivider(coreProductComponents.length, (pluginComponents.length + channelHeaderComponents.length + appBarBindings.length)),
         ...pluginComponents,
@@ -60,8 +59,9 @@ export default function AppBar() {
             return x;
         }
 
-        if (isAppBarPluginComponent(x)) {
-            if (!inScope(x.supportedProductIds ?? null, currentProductId, currentProduct?.pluginId)) {
+        if (isAppBarComponent(x)) {
+            const supportedProductIds = 'supportedProductIds' in x ? x.supportedProductIds : undefined;
+            if (!inScope(supportedProductIds ?? null, currentProductId, currentProduct?.pluginId)) {
                 return null;
             }
             return (

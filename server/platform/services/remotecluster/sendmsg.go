@@ -17,8 +17,8 @@ import (
 
 	"github.com/wiggin77/merror"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
 type SendMsgResultFunc func(msg model.RemoteClusterMsg, rc *model.RemoteCluster, resp *Response, err error)
@@ -41,7 +41,7 @@ func (rcs *Service) BroadcastMsg(ctx context.Context, msg model.RemoteClusterMsg
 	filter := model.RemoteClusterQueryFilter{
 		Topic: msg.Topic,
 	}
-	list, err := rcs.server.GetStore().RemoteCluster().GetAll(filter)
+	list, err := rcs.server.GetStore().RemoteCluster().GetAll(0, 999999, filter)
 	if err != nil {
 		return err
 	}

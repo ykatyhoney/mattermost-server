@@ -6,8 +6,8 @@ package localcachelayer
 import (
 	"bytes"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 type LocalCacheTeamStore struct {
@@ -26,14 +26,14 @@ func (s *LocalCacheTeamStore) handleClusterInvalidateTeam(msg *model.ClusterMess
 func (s LocalCacheTeamStore) ClearCaches() {
 	s.rootStore.teamAllTeamIdsForUserCache.Purge()
 	if s.rootStore.metrics != nil {
-		s.rootStore.metrics.IncrementMemCacheInvalidationCounter("All Team Ids for User - Purge")
+		s.rootStore.metrics.IncrementMemCacheInvalidationCounter(s.rootStore.teamAllTeamIdsForUserCache.Name())
 	}
 }
 
 func (s LocalCacheTeamStore) InvalidateAllTeamIdsForUser(userId string) {
-	s.rootStore.doInvalidateCacheCluster(s.rootStore.teamAllTeamIdsForUserCache, userId)
+	s.rootStore.doInvalidateCacheCluster(s.rootStore.teamAllTeamIdsForUserCache, userId, nil)
 	if s.rootStore.metrics != nil {
-		s.rootStore.metrics.IncrementMemCacheInvalidationCounter("All Team Ids for User - Remove by UserId")
+		s.rootStore.metrics.IncrementMemCacheInvalidationCounter(s.rootStore.teamAllTeamIdsForUserCache.Name())
 	}
 }
 

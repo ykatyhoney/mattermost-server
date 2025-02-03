@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestCreateScheme(t *testing.T) {
@@ -20,7 +20,8 @@ func TestCreateScheme(t *testing.T) {
 
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
+	require.NoError(t, err)
 
 	// Basic test of creating a team scheme.
 	scheme1 := &model.Scheme{
@@ -30,7 +31,7 @@ func TestCreateScheme(t *testing.T) {
 		Scope:       model.SchemeScopeTeam,
 	}
 
-	s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+	s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 	require.NoError(t, err)
 
 	assert.Equal(t, s1.DisplayName, scheme1.DisplayName)
@@ -48,20 +49,20 @@ func TestCreateScheme(t *testing.T) {
 	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
 	// Check the default roles have been created.
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamAdminRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamAdminRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamUserRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamUserRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelAdminRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelAdminRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelUserRole)
 	require.NoError(t, err)
 
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamGuestRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamGuestRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelGuestRole)
 	require.NoError(t, err)
 
 	// Basic Test of a Channel scheme.
@@ -72,7 +73,7 @@ func TestCreateScheme(t *testing.T) {
 		Scope:       model.SchemeScopeChannel,
 	}
 
-	s2, _, err := th.SystemAdminClient.CreateScheme(scheme2)
+	s2, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme2)
 	require.NoError(t, err)
 
 	assert.Equal(t, s2.DisplayName, scheme2.DisplayName)
@@ -90,11 +91,11 @@ func TestCreateScheme(t *testing.T) {
 	assert.NotZero(t, len(s2.DefaultChannelGuestRole))
 
 	// Check the default roles have been created.
-	_, _, err = th.SystemAdminClient.GetRoleByName(s2.DefaultChannelAdminRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s2.DefaultChannelAdminRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s2.DefaultChannelUserRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s2.DefaultChannelUserRole)
 	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.GetRoleByName(s2.DefaultChannelGuestRole)
+	_, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s2.DefaultChannelGuestRole)
 	require.NoError(t, err)
 
 	// Try and create a scheme with an invalid scope.
@@ -105,7 +106,7 @@ func TestCreateScheme(t *testing.T) {
 		Scope:       model.NewId(),
 	}
 
-	_, r3, _ := th.SystemAdminClient.CreateScheme(scheme3)
+	_, r3, _ := th.SystemAdminClient.CreateScheme(context.Background(), scheme3)
 	CheckBadRequestStatus(t, r3)
 
 	// Try and create a scheme with an invalid display name.
@@ -115,7 +116,7 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.NewId(),
 	}
-	_, r4, _ := th.SystemAdminClient.CreateScheme(scheme4)
+	_, r4, _ := th.SystemAdminClient.CreateScheme(context.Background(), scheme4)
 	CheckBadRequestStatus(t, r4)
 
 	// Try and create a scheme with an invalid name.
@@ -125,7 +126,7 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.NewId(),
 	}
-	_, r8, _ := th.SystemAdminClient.CreateScheme(scheme8)
+	_, r8, _ := th.SystemAdminClient.CreateScheme(context.Background(), scheme8)
 	CheckBadRequestStatus(t, r8)
 
 	// Try and create a scheme without the appropriate permissions.
@@ -135,7 +136,7 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	_, r5, err := th.Client.CreateScheme(scheme5)
+	_, r5, err := th.Client.CreateScheme(context.Background(), scheme5)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, r5)
 
@@ -147,13 +148,13 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	_, r6, _ := th.SystemAdminClient.CreateScheme(scheme6)
+	_, r6, _ := th.SystemAdminClient.CreateScheme(context.Background(), scheme6)
 	CheckNotImplementedStatus(t, r6)
 
 	// Create scheme with a Professional SKU license but no explicit 'custom_permissions_schemes' license feature.
 	lic := &model.License{
 		Features: &model.Features{
-			CustomPermissionsSchemes: model.NewBool(false),
+			CustomPermissionsSchemes: model.NewPointer(false),
 		},
 		Customer: &model.Customer{
 			Name:  "TestName",
@@ -171,11 +172,12 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	_, resp, err := th.SystemAdminClient.CreateScheme(scheme6b)
+	_, resp, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme6b)
 	require.NoError(t, err)
 	CheckCreatedStatus(t, resp)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
 	th.LoginSystemAdmin()
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
@@ -186,7 +188,7 @@ func TestCreateScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	_, r7, _ := th.SystemAdminClient.CreateScheme(scheme7)
+	_, r7, _ := th.SystemAdminClient.CreateScheme(context.Background(), scheme7)
 	CheckNotImplementedStatus(t, r7)
 }
 
@@ -204,9 +206,10 @@ func TestGetScheme(t *testing.T) {
 		Scope:       model.SchemeScopeTeam,
 	}
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
+	require.NoError(t, err)
 
-	s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+	s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 	require.NoError(t, err)
 
 	assert.Equal(t, s1.DisplayName, scheme1.DisplayName)
@@ -223,33 +226,36 @@ func TestGetScheme(t *testing.T) {
 	assert.NotZero(t, len(s1.DefaultChannelUserRole))
 	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
-	s2, _, err := th.SystemAdminClient.GetScheme(s1.Id)
+	s2, _, err := th.SystemAdminClient.GetScheme(context.Background(), s1.Id)
 	require.NoError(t, err)
 
 	assert.Equal(t, s1, s2)
 
-	_, r3, _ := th.SystemAdminClient.GetScheme(model.NewId())
+	_, r3, _ := th.SystemAdminClient.GetScheme(context.Background(), model.NewId())
 	CheckNotFoundStatus(t, r3)
 
-	_, r4, _ := th.SystemAdminClient.GetScheme("12345")
+	_, r4, _ := th.SystemAdminClient.GetScheme(context.Background(), "12345")
 	CheckBadRequestStatus(t, r4)
 
-	th.SystemAdminClient.Logout()
-	_, r5, _ := th.SystemAdminClient.GetScheme(s1.Id)
+	_, err = th.SystemAdminClient.Logout(context.Background())
+	require.NoError(t, err)
+	_, r5, _ := th.SystemAdminClient.GetScheme(context.Background(), s1.Id)
 	CheckUnauthorizedStatus(t, r5)
 
-	th.SystemAdminClient.Login(th.SystemAdminUser.Username, th.SystemAdminUser.Password)
+	_, _, err = th.SystemAdminClient.Login(context.Background(), th.SystemAdminUser.Username, th.SystemAdminUser.Password)
+	require.NoError(t, err)
 	th.App.Srv().SetLicense(nil)
-	_, _, err = th.SystemAdminClient.GetScheme(s1.Id)
+	_, _, err = th.SystemAdminClient.GetScheme(context.Background(), s1.Id)
 	require.NoError(t, err)
 
-	_, r7, err := th.Client.GetScheme(s1.Id)
+	_, r7, err := th.Client.GetScheme(context.Background(), s1.Id)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, r7)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
-	_, r8, _ := th.SystemAdminClient.GetScheme(s1.Id)
+	_, r8, _ := th.SystemAdminClient.GetScheme(context.Background(), s1.Id)
 	CheckNotImplementedStatus(t, r8)
 }
 
@@ -273,47 +279,51 @@ func TestGetSchemes(t *testing.T) {
 		Scope:       model.SchemeScopeChannel,
 	}
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
-
-	_, _, err := th.SystemAdminClient.CreateScheme(scheme1)
-	require.NoError(t, err)
-	_, _, err = th.SystemAdminClient.CreateScheme(scheme2)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
 	require.NoError(t, err)
 
-	l3, _, err := th.SystemAdminClient.GetSchemes("", 0, 100)
+	_, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
+	require.NoError(t, err)
+	_, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme2)
+	require.NoError(t, err)
+
+	l3, _, err := th.SystemAdminClient.GetSchemes(context.Background(), "", 0, 100)
 	require.NoError(t, err)
 
 	assert.NotZero(t, len(l3))
 
-	l4, _, err := th.SystemAdminClient.GetSchemes("team", 0, 100)
+	l4, _, err := th.SystemAdminClient.GetSchemes(context.Background(), "team", 0, 100)
 	require.NoError(t, err)
 
 	for _, s := range l4 {
 		assert.Equal(t, "team", s.Scope)
 	}
 
-	l5, _, err := th.SystemAdminClient.GetSchemes("channel", 0, 100)
+	l5, _, err := th.SystemAdminClient.GetSchemes(context.Background(), "channel", 0, 100)
 	require.NoError(t, err)
 
 	for _, s := range l5 {
 		assert.Equal(t, "channel", s.Scope)
 	}
 
-	_, r6, _ := th.SystemAdminClient.GetSchemes("asdf", 0, 100)
+	_, r6, _ := th.SystemAdminClient.GetSchemes(context.Background(), "asdf", 0, 100)
 	CheckBadRequestStatus(t, r6)
 
-	th.Client.Logout()
-	_, r7, _ := th.Client.GetSchemes("", 0, 100)
+	_, err = th.Client.Logout(context.Background())
+	require.NoError(t, err)
+	_, r7, _ := th.Client.GetSchemes(context.Background(), "", 0, 100)
 	CheckUnauthorizedStatus(t, r7)
 
-	th.Client.Login(th.BasicUser.Username, th.BasicUser.Password)
-	_, r8, err := th.Client.GetSchemes("", 0, 100)
+	_, _, err = th.Client.Login(context.Background(), th.BasicUser.Username, th.BasicUser.Password)
+	require.NoError(t, err)
+	_, r8, err := th.Client.GetSchemes(context.Background(), "", 0, 100)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, r8)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
-	_, r9, _ := th.SystemAdminClient.GetSchemes("", 0, 100)
+	_, r9, _ := th.SystemAdminClient.GetSchemes(context.Background(), "", 0, 100)
 	CheckNotImplementedStatus(t, r9)
 }
 
@@ -323,7 +333,8 @@ func TestGetTeamsForScheme(t *testing.T) {
 
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
+	require.NoError(t, err)
 
 	scheme1 := &model.Scheme{
 		DisplayName: model.NewId(),
@@ -331,7 +342,7 @@ func TestGetTeamsForScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	scheme1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+	scheme1, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 	require.NoError(t, err)
 
 	team1 := &model.Team{
@@ -343,7 +354,7 @@ func TestGetTeamsForScheme(t *testing.T) {
 	team1, err = th.App.Srv().Store().Team().Save(team1)
 	require.NoError(t, err)
 
-	l2, _, err := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
+	l2, _, err := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Zero(t, len(l2))
 
@@ -351,7 +362,7 @@ func TestGetTeamsForScheme(t *testing.T) {
 	team1, err = th.App.Srv().Store().Team().Update(team1)
 	assert.NoError(t, err)
 
-	l3, _, err := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
+	l3, _, err := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Len(t, l3, 1)
 	assert.Equal(t, team1.Id, l3[0].Id)
@@ -365,30 +376,32 @@ func TestGetTeamsForScheme(t *testing.T) {
 	team2, err = th.App.Srv().Store().Team().Save(team2)
 	require.NoError(t, err)
 
-	l4, _, err := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
+	l4, _, err := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Len(t, l4, 2)
 	assert.Equal(t, team1.Id, l4[0].Id)
 	assert.Equal(t, team2.Id, l4[1].Id)
 
-	l5, _, err := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 1, 1)
+	l5, _, err := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme1.Id, 1, 1)
 	require.NoError(t, err)
 	assert.Len(t, l5, 1)
 	assert.Equal(t, team2.Id, l5[0].Id)
 
 	// Check various error cases.
-	_, ri1, _ := th.SystemAdminClient.GetTeamsForScheme(model.NewId(), 0, 100)
+	_, ri1, _ := th.SystemAdminClient.GetTeamsForScheme(context.Background(), model.NewId(), 0, 100)
 	CheckNotFoundStatus(t, ri1)
 
-	_, ri2, _ := th.SystemAdminClient.GetTeamsForScheme("", 0, 100)
+	_, ri2, _ := th.SystemAdminClient.GetTeamsForScheme(context.Background(), "", 0, 100)
 	CheckBadRequestStatus(t, ri2)
 
-	th.Client.Logout()
-	_, ri3, _ := th.Client.GetTeamsForScheme(model.NewId(), 0, 100)
+	_, err = th.Client.Logout(context.Background())
+	require.NoError(t, err)
+	_, ri3, _ := th.Client.GetTeamsForScheme(context.Background(), model.NewId(), 0, 100)
 	CheckUnauthorizedStatus(t, ri3)
 
-	th.Client.Login(th.BasicUser.Username, th.BasicUser.Password)
-	_, ri4, err := th.Client.GetTeamsForScheme(model.NewId(), 0, 100)
+	_, _, err = th.Client.Login(context.Background(), th.BasicUser.Username, th.BasicUser.Password)
+	require.NoError(t, err)
+	_, ri4, err := th.Client.GetTeamsForScheme(context.Background(), model.NewId(), 0, 100)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, ri4)
 
@@ -398,15 +411,16 @@ func TestGetTeamsForScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeChannel,
 	}
-	scheme2, _, err = th.SystemAdminClient.CreateScheme(scheme2)
+	scheme2, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme2)
 	require.NoError(t, err)
 
-	_, ri5, _ := th.SystemAdminClient.GetTeamsForScheme(scheme2.Id, 0, 100)
+	_, ri5, _ := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme2.Id, 0, 100)
 	CheckBadRequestStatus(t, ri5)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
-	_, ri6, _ := th.SystemAdminClient.GetTeamsForScheme(scheme1.Id, 0, 100)
+	_, ri6, _ := th.SystemAdminClient.GetTeamsForScheme(context.Background(), scheme1.Id, 0, 100)
 	CheckNotImplementedStatus(t, ri6)
 }
 
@@ -416,7 +430,8 @@ func TestGetChannelsForScheme(t *testing.T) {
 
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
+	require.NoError(t, err)
 
 	scheme1 := &model.Scheme{
 		DisplayName: model.NewId(),
@@ -424,7 +439,7 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeChannel,
 	}
-	scheme1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+	scheme1, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 	require.NoError(t, err)
 
 	channel1 := &model.Channel{
@@ -434,18 +449,18 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Type:        model.ChannelTypeOpen,
 	}
 
-	channel1, errCh := th.App.Srv().Store().Channel().Save(channel1, 1000000)
+	channel1, errCh := th.App.Srv().Store().Channel().Save(th.Context, channel1, 1000000)
 	assert.NoError(t, errCh)
 
-	l2, _, err := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
+	l2, _, err := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Zero(t, len(l2))
 
 	channel1.SchemeId = &scheme1.Id
-	channel1, err = th.App.Srv().Store().Channel().Update(channel1)
+	channel1, err = th.App.Srv().Store().Channel().Update(th.Context, channel1)
 	assert.NoError(t, err)
 
-	l3, _, err := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
+	l3, _, err := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Len(t, l3, 1)
 	assert.Equal(t, channel1.Id, l3[0].Id)
@@ -457,33 +472,35 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Type:        model.ChannelTypeOpen,
 		SchemeId:    &scheme1.Id,
 	}
-	channel2, err = th.App.Srv().Store().Channel().Save(channel2, 1000000)
+	channel2, err = th.App.Srv().Store().Channel().Save(th.Context, channel2, 1000000)
 	assert.NoError(t, err)
 
-	l4, _, err := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
+	l4, _, err := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme1.Id, 0, 100)
 	require.NoError(t, err)
 	assert.Len(t, l4, 2)
 	assert.Equal(t, channel1.Id, l4[0].Id)
 	assert.Equal(t, channel2.Id, l4[1].Id)
 
-	l5, _, err := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 1, 1)
+	l5, _, err := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme1.Id, 1, 1)
 	require.NoError(t, err)
 	assert.Len(t, l5, 1)
 	assert.Equal(t, channel2.Id, l5[0].Id)
 
 	// Check various error cases.
-	_, ri1, _ := th.SystemAdminClient.GetChannelsForScheme(model.NewId(), 0, 100)
+	_, ri1, _ := th.SystemAdminClient.GetChannelsForScheme(context.Background(), model.NewId(), 0, 100)
 	CheckNotFoundStatus(t, ri1)
 
-	_, ri2, _ := th.SystemAdminClient.GetChannelsForScheme("", 0, 100)
+	_, ri2, _ := th.SystemAdminClient.GetChannelsForScheme(context.Background(), "", 0, 100)
 	CheckBadRequestStatus(t, ri2)
 
-	th.Client.Logout()
-	_, ri3, _ := th.Client.GetChannelsForScheme(model.NewId(), 0, 100)
+	_, err = th.Client.Logout(context.Background())
+	require.NoError(t, err)
+	_, ri3, _ := th.Client.GetChannelsForScheme(context.Background(), model.NewId(), 0, 100)
 	CheckUnauthorizedStatus(t, ri3)
 
-	th.Client.Login(th.BasicUser.Username, th.BasicUser.Password)
-	_, ri4, err := th.Client.GetChannelsForScheme(model.NewId(), 0, 100)
+	_, _, err = th.Client.Login(context.Background(), th.BasicUser.Username, th.BasicUser.Password)
+	require.NoError(t, err)
+	_, ri4, err := th.Client.GetChannelsForScheme(context.Background(), model.NewId(), 0, 100)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, ri4)
 
@@ -493,15 +510,16 @@ func TestGetChannelsForScheme(t *testing.T) {
 		Description: model.NewId(),
 		Scope:       model.SchemeScopeTeam,
 	}
-	scheme2, _, err = th.SystemAdminClient.CreateScheme(scheme2)
+	scheme2, _, err = th.SystemAdminClient.CreateScheme(context.Background(), scheme2)
 	require.NoError(t, err)
 
-	_, ri5, _ := th.SystemAdminClient.GetChannelsForScheme(scheme2.Id, 0, 100)
+	_, ri5, _ := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme2.Id, 0, 100)
 	CheckBadRequestStatus(t, ri5)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
-	_, ri6, _ := th.SystemAdminClient.GetChannelsForScheme(scheme1.Id, 0, 100)
+	_, ri6, _ := th.SystemAdminClient.GetChannelsForScheme(context.Background(), scheme1.Id, 0, 100)
 	CheckNotImplementedStatus(t, ri6)
 }
 
@@ -511,7 +529,8 @@ func TestPatchScheme(t *testing.T) {
 
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-	th.App.SetPhase2PermissionsMigrationStatus(true)
+	err := th.App.SetPhase2PermissionsMigrationStatus(true)
+	require.NoError(t, err)
 
 	// Basic test of creating a team scheme.
 	scheme1 := &model.Scheme{
@@ -521,7 +540,7 @@ func TestPatchScheme(t *testing.T) {
 		Scope:       model.SchemeScopeTeam,
 	}
 
-	s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+	s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 	require.NoError(t, err)
 
 	assert.Equal(t, s1.DisplayName, scheme1.DisplayName)
@@ -538,7 +557,7 @@ func TestPatchScheme(t *testing.T) {
 	assert.NotZero(t, len(s1.DefaultChannelUserRole))
 	assert.NotZero(t, len(s1.DefaultChannelGuestRole))
 
-	s2, _, err := th.SystemAdminClient.GetScheme(s1.Id)
+	s2, _, err := th.SystemAdminClient.GetScheme(context.Background(), s1.Id)
 	require.NoError(t, err)
 
 	assert.Equal(t, s1, s2)
@@ -553,14 +572,14 @@ func TestPatchScheme(t *testing.T) {
 	*schemePatch.Name = model.NewId()
 	*schemePatch.Description = model.NewId()
 
-	s3, _, err := th.SystemAdminClient.PatchScheme(s2.Id, schemePatch)
+	s3, _, err := th.SystemAdminClient.PatchScheme(context.Background(), s2.Id, schemePatch)
 	require.NoError(t, err)
 	assert.Equal(t, s3.Id, s2.Id)
 	assert.Equal(t, s3.DisplayName, *schemePatch.DisplayName)
 	assert.Equal(t, s3.Name, *schemePatch.Name)
 	assert.Equal(t, s3.Description, *schemePatch.Description)
 
-	s4, _, err := th.SystemAdminClient.GetScheme(s3.Id)
+	s4, _, err := th.SystemAdminClient.GetScheme(context.Background(), s3.Id)
 	require.NoError(t, err)
 	assert.Equal(t, s3, s4)
 
@@ -569,45 +588,45 @@ func TestPatchScheme(t *testing.T) {
 	*schemePatch.DisplayName = model.NewId()
 	schemePatch.Description = nil
 
-	s5, _, err := th.SystemAdminClient.PatchScheme(s4.Id, schemePatch)
+	s5, _, err := th.SystemAdminClient.PatchScheme(context.Background(), s4.Id, schemePatch)
 	require.NoError(t, err)
 	assert.Equal(t, s5.Id, s4.Id)
 	assert.Equal(t, s5.DisplayName, *schemePatch.DisplayName)
 	assert.Equal(t, s5.Name, *schemePatch.Name)
 	assert.Equal(t, s5.Description, s4.Description)
 
-	s6, _, err := th.SystemAdminClient.GetScheme(s5.Id)
+	s6, _, err := th.SystemAdminClient.GetScheme(context.Background(), s5.Id)
 	require.NoError(t, err)
 	assert.Equal(t, s5, s6)
 
 	// Test with invalid patch.
 	*schemePatch.Name = strings.Repeat(model.NewId(), 20)
-	_, r7, _ := th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
+	_, r7, _ := th.SystemAdminClient.PatchScheme(context.Background(), s6.Id, schemePatch)
 	CheckBadRequestStatus(t, r7)
 
 	// Test with unknown ID.
 	*schemePatch.Name = model.NewId()
-	_, r8, _ := th.SystemAdminClient.PatchScheme(model.NewId(), schemePatch)
+	_, r8, _ := th.SystemAdminClient.PatchScheme(context.Background(), model.NewId(), schemePatch)
 	CheckNotFoundStatus(t, r8)
 
 	// Test with invalid ID.
-	_, r9, _ := th.SystemAdminClient.PatchScheme("12345", schemePatch)
+	_, r9, _ := th.SystemAdminClient.PatchScheme(context.Background(), "12345", schemePatch)
 	CheckBadRequestStatus(t, r9)
 
 	// Test without required permissions.
-	_, r10, err := th.Client.PatchScheme(s6.Id, schemePatch)
+	_, r10, err := th.Client.PatchScheme(context.Background(), s6.Id, schemePatch)
 	require.Error(t, err)
 	CheckForbiddenStatus(t, r10)
 
 	// Test without license.
 	th.App.Srv().SetLicense(nil)
-	_, r11, _ := th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
+	_, r11, _ := th.SystemAdminClient.PatchScheme(context.Background(), s6.Id, schemePatch)
 	CheckNotImplementedStatus(t, r11)
 
 	// Patch scheme with a Professional SKU license but no explicit 'custom_permissions_schemes' license feature.
 	lic := &model.License{
 		Features: &model.Features{
-			CustomPermissionsSchemes: model.NewBool(false),
+			CustomPermissionsSchemes: model.NewPointer(false),
 		},
 		Customer: &model.Customer{
 			Name:  "TestName",
@@ -619,15 +638,16 @@ func TestPatchScheme(t *testing.T) {
 		ExpiresAt:    model.GetMillis() + 100000,
 	}
 	th.App.Srv().SetLicense(lic)
-	_, _, err = th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
+	_, _, err = th.SystemAdminClient.PatchScheme(context.Background(), s6.Id, schemePatch)
 	require.NoError(t, err)
 
-	th.App.SetPhase2PermissionsMigrationStatus(false)
+	err = th.App.SetPhase2PermissionsMigrationStatus(false)
+	require.NoError(t, err)
 
 	th.LoginSystemAdmin()
 	th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-	_, r12, _ := th.SystemAdminClient.PatchScheme(s6.Id, schemePatch)
+	_, r12, _ := th.SystemAdminClient.PatchScheme(context.Background(), s6.Id, schemePatch)
 	CheckNotImplementedStatus(t, r12)
 }
 
@@ -638,7 +658,8 @@ func TestDeleteScheme(t *testing.T) {
 	t.Run("ValidTeamScheme", func(t *testing.T) {
 		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-		th.App.SetPhase2PermissionsMigrationStatus(true)
+		err := th.App.SetPhase2PermissionsMigrationStatus(true)
+		require.NoError(t, err)
 
 		// Create a team scheme.
 		scheme1 := &model.Scheme{
@@ -648,21 +669,21 @@ func TestDeleteScheme(t *testing.T) {
 			Scope:       model.SchemeScopeTeam,
 		}
 
-		s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+		s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 		require.NoError(t, err)
 
 		// Retrieve the roles and check they are not deleted.
-		role1, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamAdminRole)
+		role1, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamAdminRole)
 		require.NoError(t, err)
-		role2, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamUserRole)
+		role2, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamUserRole)
 		require.NoError(t, err)
-		role3, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelAdminRole)
+		role3, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelAdminRole)
 		require.NoError(t, err)
-		role4, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
+		role4, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelUserRole)
 		require.NoError(t, err)
-		role5, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+		role5, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamGuestRole)
 		require.NoError(t, err)
-		role6, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		role6, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelGuestRole)
 		require.NoError(t, err)
 
 		assert.Zero(t, role1.DeleteAt)
@@ -683,21 +704,21 @@ func TestDeleteScheme(t *testing.T) {
 		require.NoError(t, err)
 
 		// Delete the Scheme.
-		_, err = th.SystemAdminClient.DeleteScheme(s1.Id)
+		_, err = th.SystemAdminClient.DeleteScheme(context.Background(), s1.Id)
 		require.NoError(t, err)
 
 		// Check the roles were deleted.
-		role1, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamAdminRole)
+		role1, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamAdminRole)
 		require.NoError(t, err)
-		role2, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamUserRole)
+		role2, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamUserRole)
 		require.NoError(t, err)
-		role3, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelAdminRole)
+		role3, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelAdminRole)
 		require.NoError(t, err)
-		role4, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
+		role4, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelUserRole)
 		require.NoError(t, err)
-		role5, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultTeamGuestRole)
+		role5, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultTeamGuestRole)
 		require.NoError(t, err)
-		role6, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		role6, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelGuestRole)
 		require.NoError(t, err)
 
 		assert.NotZero(t, role1.DeleteAt)
@@ -708,7 +729,7 @@ func TestDeleteScheme(t *testing.T) {
 		assert.NotZero(t, role6.DeleteAt)
 
 		// Check the team now uses the default scheme
-		c2, _, err := th.SystemAdminClient.GetTeam(team.Id, "")
+		c2, _, err := th.SystemAdminClient.GetTeam(context.Background(), team.Id, "")
 		require.NoError(t, err)
 		assert.Equal(t, "", *c2.SchemeId)
 	})
@@ -716,7 +737,8 @@ func TestDeleteScheme(t *testing.T) {
 	t.Run("ValidChannelScheme", func(t *testing.T) {
 		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-		th.App.SetPhase2PermissionsMigrationStatus(true)
+		err := th.App.SetPhase2PermissionsMigrationStatus(true)
+		require.NoError(t, err)
 
 		// Create a channel scheme.
 		scheme1 := &model.Scheme{
@@ -726,15 +748,15 @@ func TestDeleteScheme(t *testing.T) {
 			Scope:       model.SchemeScopeChannel,
 		}
 
-		s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+		s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 		require.NoError(t, err)
 
 		// Retrieve the roles and check they are not deleted.
-		role3, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelAdminRole)
+		role3, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelAdminRole)
 		require.NoError(t, err)
-		role4, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
+		role4, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelUserRole)
 		require.NoError(t, err)
-		role6, _, err := th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		role6, _, err := th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelGuestRole)
 		require.NoError(t, err)
 
 		assert.Zero(t, role3.DeleteAt)
@@ -742,7 +764,7 @@ func TestDeleteScheme(t *testing.T) {
 		assert.Zero(t, role6.DeleteAt)
 
 		// Make sure this scheme is in use by a team.
-		channel, err := th.App.Srv().Store().Channel().Save(&model.Channel{
+		channel, err := th.App.Srv().Store().Channel().Save(th.Context, &model.Channel{
 			TeamId:      model.NewId(),
 			DisplayName: model.NewId(),
 			Name:        model.NewId(),
@@ -752,15 +774,15 @@ func TestDeleteScheme(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Delete the Scheme.
-		_, err = th.SystemAdminClient.DeleteScheme(s1.Id)
+		_, err = th.SystemAdminClient.DeleteScheme(context.Background(), s1.Id)
 		require.NoError(t, err)
 
 		// Check the roles were deleted.
-		role3, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelAdminRole)
+		role3, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelAdminRole)
 		require.NoError(t, err)
-		role4, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelUserRole)
+		role4, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelUserRole)
 		require.NoError(t, err)
-		role6, _, err = th.SystemAdminClient.GetRoleByName(s1.DefaultChannelGuestRole)
+		role6, _, err = th.SystemAdminClient.GetRoleByName(context.Background(), s1.DefaultChannelGuestRole)
 		require.NoError(t, err)
 
 		assert.NotZero(t, role3.DeleteAt)
@@ -768,7 +790,7 @@ func TestDeleteScheme(t *testing.T) {
 		assert.NotZero(t, role6.DeleteAt)
 
 		// Check the channel now uses the default scheme
-		c2, _, err := th.SystemAdminClient.GetChannelByName(channel.Name, channel.TeamId, "")
+		c2, _, err := th.SystemAdminClient.GetChannelByName(context.Background(), channel.Name, channel.TeamId, "")
 		require.NoError(t, err)
 		assert.Equal(t, "", *c2.SchemeId)
 	})
@@ -776,7 +798,8 @@ func TestDeleteScheme(t *testing.T) {
 	t.Run("FailureCases", func(t *testing.T) {
 		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-		th.App.SetPhase2PermissionsMigrationStatus(true)
+		err := th.App.SetPhase2PermissionsMigrationStatus(true)
+		require.NoError(t, err)
 
 		scheme1 := &model.Scheme{
 			DisplayName: model.NewId(),
@@ -785,7 +808,7 @@ func TestDeleteScheme(t *testing.T) {
 			Scope:       model.SchemeScopeChannel,
 		}
 
-		s1, _, err := th.SystemAdminClient.CreateScheme(scheme1)
+		s1, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme1)
 		require.NoError(t, err)
 
 		scheme2 := &model.Scheme{
@@ -794,34 +817,34 @@ func TestDeleteScheme(t *testing.T) {
 			Description: model.NewId(),
 			Scope:       model.SchemeScopeChannel,
 		}
-		s2, _, err := th.SystemAdminClient.CreateScheme(scheme2)
+		s2, _, err := th.SystemAdminClient.CreateScheme(context.Background(), scheme2)
 		require.NoError(t, err)
 
 		// Test with unknown ID.
-		r2, err := th.SystemAdminClient.DeleteScheme(model.NewId())
+		r2, err := th.SystemAdminClient.DeleteScheme(context.Background(), model.NewId())
 		require.Error(t, err)
 		CheckNotFoundStatus(t, r2)
 
 		// Test with invalid ID.
-		r3, err := th.SystemAdminClient.DeleteScheme("12345")
+		r3, err := th.SystemAdminClient.DeleteScheme(context.Background(), "12345")
 		require.Error(t, err)
 		CheckBadRequestStatus(t, r3)
 
 		// Test without required permissions.
-		r4, err := th.Client.DeleteScheme(s1.Id)
+		r4, err := th.Client.DeleteScheme(context.Background(), s1.Id)
 		require.Error(t, err)
 		CheckForbiddenStatus(t, r4)
 
 		// Test without license.
 		th.App.Srv().SetLicense(nil)
-		r5, err := th.SystemAdminClient.DeleteScheme(s1.Id)
+		r5, err := th.SystemAdminClient.DeleteScheme(context.Background(), s1.Id)
 		require.Error(t, err)
 		CheckNotImplementedStatus(t, r5)
 
 		// Delete scheme with a Professional SKU license but no explicit 'custom_permissions_schemes' license feature.
 		lic := &model.License{
 			Features: &model.Features{
-				CustomPermissionsSchemes: model.NewBool(false),
+				CustomPermissionsSchemes: model.NewPointer(false),
 			},
 			Customer: &model.Customer{
 				Name:  "TestName",
@@ -833,14 +856,15 @@ func TestDeleteScheme(t *testing.T) {
 			ExpiresAt:    model.GetMillis() + 100000,
 		}
 		th.App.Srv().SetLicense(lic)
-		_, err = th.SystemAdminClient.DeleteScheme(s2.Id)
+		_, err = th.SystemAdminClient.DeleteScheme(context.Background(), s2.Id)
 		require.NoError(t, err)
 
-		th.App.SetPhase2PermissionsMigrationStatus(false)
+		err = th.App.SetPhase2PermissionsMigrationStatus(false)
+		require.NoError(t, err)
 
 		th.App.Srv().SetLicense(model.NewTestLicense("custom_permissions_schemes"))
 
-		r6, err := th.SystemAdminClient.DeleteScheme(s1.Id)
+		r6, err := th.SystemAdminClient.DeleteScheme(context.Background(), s1.Id)
 		require.Error(t, err)
 		CheckNotImplementedStatus(t, r6)
 	})
@@ -851,7 +875,8 @@ func TestUpdateTeamSchemeWithTeamMembers(t *testing.T) {
 	defer th.TearDown()
 
 	t.Run("Correctly invalidates team member cache", func(t *testing.T) {
-		th.App.SetPhase2PermissionsMigrationStatus(true)
+		err := th.App.SetPhase2PermissionsMigrationStatus(true)
+		require.NoError(t, err)
 
 		team := th.CreateTeam()
 		_, _, appErr := th.App.AddUserToTeam(th.Context, team.Id, th.BasicUser.Id, th.SystemAdminUser.Id)
@@ -867,14 +892,14 @@ func TestUpdateTeamSchemeWithTeamMembers(t *testing.T) {
 
 		th.LoginBasic()
 
-		_, _, err := th.Client.CreateChannel(&model.Channel{DisplayName: "Test API Name", Name: GenerateTestChannelName(), Type: model.ChannelTypeOpen, TeamId: team.Id})
+		_, _, err = th.Client.CreateChannel(context.Background(), &model.Channel{DisplayName: "Test API Name", Name: GenerateTestChannelName(), Type: model.ChannelTypeOpen, TeamId: team.Id})
 		require.NoError(t, err)
 
 		team.SchemeId = &teamScheme.Id
 		team, appErr = th.App.UpdateTeamScheme(team)
 		require.Nil(t, appErr)
 
-		_, _, err = th.Client.CreateChannel(&model.Channel{DisplayName: "Test API Name", Name: GenerateTestChannelName(), Type: model.ChannelTypeOpen, TeamId: team.Id})
+		_, _, err = th.Client.CreateChannel(context.Background(), &model.Channel{DisplayName: "Test API Name", Name: GenerateTestChannelName(), Type: model.ChannelTypeOpen, TeamId: team.Id})
 		require.Error(t, err)
 	})
 }

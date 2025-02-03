@@ -1,27 +1,28 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {createSelector} from 'reselect';
-
+import {Preferences} from 'mattermost-redux/constants';
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {appBarEnabled, getAppBarAppBindings} from 'mattermost-redux/selectors/entities/apps';
+import {getLicense} from 'mattermost-redux/selectors/entities/general';
+import {get} from 'mattermost-redux/selectors/entities/preferences';
 import {createShallowSelector} from 'mattermost-redux/utils/helpers';
 
-import {autoShowLinkedBoardFFEnabled, get, getBool} from 'mattermost-redux/selectors/entities/preferences';
-import {Preferences} from 'mattermost-redux/constants';
+import type {GlobalState} from 'types/store';
 
-import {OnboardingTaskCategory, OnboardingTaskList} from 'components/onboarding_tasks';
-
-import {GlobalState} from 'types/store';
-
-import {AppBinding} from '@mattermost/types/apps';
-
-import {FileDropdownPluginComponent, PluginComponent} from '../types/store/plugins';
+export const getPluginUserSettings = createSelector(
+    'getPluginUserSettings',
+    (state: GlobalState) => state.plugins.userSettings,
+    (settings) => {
+        return settings || {};
+    },
+);
 
 export const getFilesDropdownPluginMenuItems = createSelector(
     'getFilesDropdownPluginMenuItems',
     (state: GlobalState) => state.plugins.components.FilesDropdown,
     (components) => {
-        return (components || []) as unknown as FileDropdownPluginComponent[];
+        return (components || []);
     },
 );
 
@@ -40,7 +41,7 @@ export const getChannelHeaderPluginComponents = createSelector(
     (state: GlobalState) => state.plugins.components.AppBar,
     (enabled, channelHeaderComponents = [], appBarComponents = []) => {
         if (!enabled || !appBarComponents.length) {
-            return channelHeaderComponents as unknown as PluginComponent[];
+            return channelHeaderComponents;
         }
 
         // Remove channel header icons for plugins that have also registered an app bar component
@@ -95,7 +96,7 @@ export const shouldShowAppBar = createSelector(
     getAppBarAppBindings,
     getAppBarPluginComponents,
     getChannelHeaderPluginComponents,
-    (enabled: boolean, bindings: AppBinding[], appBarComponents: PluginComponent[], channelHeaderComponents) => {
+    (enabled, bindings, appBarComponents, channelHeaderComponents) => {
         return enabled && Boolean(bindings.length || appBarComponents.length || channelHeaderComponents.length);
     },
 );
@@ -106,11 +107,38 @@ export function showNewChannelWithBoardPulsatingDot(state: GlobalState): boolean
     return showPulsatingDot;
 }
 
-export const shouldShowAutoLinkedBoard = createSelector(
-    'shouldShowAutoLinkedBoard',
-    (state: GlobalState) => getBool(state, OnboardingTaskCategory, OnboardingTaskList.ONBOARDING_LINKED_BOARD_AUTO_SHOWN),
-    (state: GlobalState) => autoShowLinkedBoardFFEnabled(state),
-    (showAutoLinkedBoardPref: boolean, showAutoLinkedBoardFFEnabled: boolean) => {
-        return !showAutoLinkedBoardPref && showAutoLinkedBoardFFEnabled;
+export const getSearchPluginSuggestions = createSelector(
+    'getSearchPluginSuggestions',
+    getLicense,
+    (state: GlobalState) => state.plugins.components.SearchSuggestions,
+    (license, components = []) => {
+        if (license.IsLicensed !== 'true') {
+            return [];
+        }
+        return components;
+    },
+);
+
+export const getSearchBoxHints = createSelector(
+    'getSearchBoxHints',
+    getLicense,
+    (state: GlobalState) => state.plugins.components.SearchHints,
+    (license, components = []) => {
+        if (license.IsLicensed !== 'true') {
+            return [];
+        }
+        return components;
+    },
+);
+
+export const getSearchButtons = createSelector(
+    'getSearchButtons',
+    getLicense,
+    (state: GlobalState) => state.plugins.components.SearchButtons,
+    (license, components = []) => {
+        if (license.IsLicensed !== 'true') {
+            return [];
+        }
+        return components;
     },
 );

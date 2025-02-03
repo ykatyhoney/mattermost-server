@@ -9,16 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func TestFilterInaccessibleFiles(t *testing.T) {
 	th := Setup(t)
 	th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-	th.App.Srv().Store().System().Save(&model.System{
+	err := th.App.Srv().Store().System().Save(&model.System{
 		Name:  model.SystemLastAccessibleFileTime,
 		Value: "2",
 	})
+	require.NoError(t, err)
 
 	defer th.TearDown()
 
@@ -117,10 +118,11 @@ func TestFilterInaccessibleFiles(t *testing.T) {
 func TestGetFilteredAccessibleFiles(t *testing.T) {
 	th := Setup(t)
 	th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-	th.App.Srv().Store().System().Save(&model.System{
+	err := th.App.Srv().Store().System().Save(&model.System{
 		Name:  model.SystemLastAccessibleFileTime,
 		Value: "2",
 	})
+	require.NoError(t, err)
 
 	defer th.TearDown()
 
@@ -158,10 +160,11 @@ func TestGetFilteredAccessibleFiles(t *testing.T) {
 func TestIsInaccessibleFile(t *testing.T) {
 	th := Setup(t)
 	th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-	th.App.Srv().Store().System().Save(&model.System{
+	err := th.App.Srv().Store().System().Save(&model.System{
 		Name:  model.SystemLastAccessibleFileTime,
 		Value: "2",
 	})
+	require.NoError(t, err)
 
 	defer th.TearDown()
 
@@ -179,10 +182,11 @@ func TestIsInaccessibleFile(t *testing.T) {
 func TestRemoveInaccessibleContentFromFilesSlice(t *testing.T) {
 	th := Setup(t)
 	th.App.Srv().SetLicense(model.NewTestLicense("cloud"))
-	th.App.Srv().Store().System().Save(&model.System{
+	err := th.App.Srv().Store().System().Save(&model.System{
 		Name:  model.SystemLastAccessibleFileTime,
 		Value: "2",
 	})
+	require.NoError(t, err)
 
 	defer th.TearDown()
 

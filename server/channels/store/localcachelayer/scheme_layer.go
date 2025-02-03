@@ -6,8 +6,8 @@ package localcachelayer
 import (
 	"bytes"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 type LocalCacheSchemeStore struct {
@@ -25,7 +25,7 @@ func (s *LocalCacheSchemeStore) handleClusterInvalidateScheme(msg *model.Cluster
 
 func (s LocalCacheSchemeStore) Save(scheme *model.Scheme) (*model.Scheme, error) {
 	if scheme.Id != "" {
-		defer s.rootStore.doInvalidateCacheCluster(s.rootStore.schemeCache, scheme.Id)
+		defer s.rootStore.doInvalidateCacheCluster(s.rootStore.schemeCache, scheme.Id, nil)
 	}
 	return s.SchemeStore.Save(scheme)
 }
@@ -47,7 +47,7 @@ func (s LocalCacheSchemeStore) Get(schemeId string) (*model.Scheme, error) {
 }
 
 func (s LocalCacheSchemeStore) Delete(schemeId string) (*model.Scheme, error) {
-	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.schemeCache, schemeId)
+	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.schemeCache, schemeId, nil)
 	defer s.rootStore.doClearCacheCluster(s.rootStore.roleCache)
 	defer s.rootStore.doClearCacheCluster(s.rootStore.rolePermissionsCache)
 	return s.SchemeStore.Delete(schemeId)

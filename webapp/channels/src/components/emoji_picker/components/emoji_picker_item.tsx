@@ -1,17 +1,19 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {memo, useCallback} from 'react';
-import {useIntl} from 'react-intl';
 import classNames from 'classnames';
 import throttle from 'lodash/throttle';
+import React, {memo, useCallback} from 'react';
+import {useIntl} from 'react-intl';
+
+import type {Emoji} from '@mattermost/types/emojis';
 
 import {getEmojiImageUrl, isSystemEmoji} from 'mattermost-redux/utils/emoji_utils';
-import {Emoji} from '@mattermost/types/emojis';
+
+import {EMOJI_SCROLL_THROTTLE_DELAY} from 'components/emoji_picker/constants';
+import type {EmojiCursor} from 'components/emoji_picker/types';
 
 import imgTrans from 'images/img_trans.gif';
-import {EmojiCursor} from 'components/emoji_picker/types';
-import {EMOJI_SCROLL_THROTTLE_DELAY} from 'components/emoji_picker/constants';
 
 interface Props {
     emoji: Emoji;
@@ -53,32 +55,21 @@ function EmojiPickerItem({emoji, rowIndex, isSelected, onClick, onMouseOver}: Pr
     let content;
 
     if (isSystemEmoji(emoji)) {
-        const emojiName = emoji.short_name ? emoji.short_name : emoji.name;
         const emojiUnified = emoji.unified ? emoji.unified.toLowerCase() : emoji.name.toLowerCase();
 
         content = (
             <img
-                alt={'emoji image'}
+                alt={`${emoji.name.toLocaleLowerCase()} emoji`}
                 data-testid={emoji.short_names}
                 src={imgTrans}
                 className={`emojisprite emoji-category-${emoji.category} emoji-${emojiUnified}`}
                 id={`emoji-${emojiUnified}`}
-                aria-label={formatMessage(
-                    {
-                        id: 'emoji_picker_item.emoji_aria_label',
-                        defaultMessage: '{emojiName} emoji',
-                    },
-                    {
-                        emojiName: (emojiName).replace(/_/g, ' '),
-                    },
-                )}
-                role='button'
             />
         );
     } else {
         content = (
             <img
-                alt={'custom emoji image'}
+                alt={'custom emoji'}
                 data-testid={emoji.name}
                 src={getEmojiImageUrl(emoji)}
                 className={'emoji-category--custom'}
@@ -87,15 +78,26 @@ function EmojiPickerItem({emoji, rowIndex, isSelected, onClick, onMouseOver}: Pr
     }
 
     return (
-        <div
+        <button
             className={itemClassName}
             onClick={handleClick}
             onMouseOver={throttledMouseOver}
+            data-testid='emojiItem'
+            tabIndex={-1}
+            type='button'
+            id={emoji.name.toLocaleLowerCase().replaceAll(' ', '_')}
+            aria-label={formatMessage(
+                {
+                    id: 'emoji_picker_item.emoji_aria_label',
+                    defaultMessage: '{emojiName} emoji',
+                },
+                {
+                    emojiName: (isSystemEmoji(emoji) ? emoji.short_name : emoji.name).replace(/_/g, ' '),
+                },
+            )}
         >
-            <div data-testid='emojiItem'>
-                {content}
-            </div>
-        </div>
+            {content}
+        </button>
     );
 }
 

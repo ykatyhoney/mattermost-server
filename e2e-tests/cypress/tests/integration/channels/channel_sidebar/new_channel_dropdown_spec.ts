@@ -61,20 +61,17 @@ describe('Channel sidebar', () => {
         cy.get('#channelHeaderTitle').should('contain', 'Town Square');
         cy.url().should('include', `/${teamName}/channels/town-square`);
 
-        // # Click the New Channel Dropdown button
-        cy.uiGetLHSAddChannelButton().should('be.visible').click();
-
-        // # Click the Browse channels dropdown item
-        cy.get('.AddChannelDropdown .MenuItem:contains(Browse channels) button').should('be.visible').click();
+        // # Click on the sidebar menu dropdown and select browse channels
+        cy.uiBrowseOrCreateChannel('Browse channels');
 
         // * Verify that the more channels modal is visible
-        cy.get('.more-modal').should('be.visible');
+        cy.get('#browseChannelsModal').should('be.visible');
 
         // Click the Off-Topic channel
-        cy.get('.more-modal button:contains(Off-Topic)').should('be.visible').click();
+        cy.findByText('Off-Topic').should('be.visible').click();
 
         // Verify that new channel is in the sidebar and is active
-        cy.get('.more-modal').should('not.exist');
+        cy.get('#browseChannelsModal').should('exist');
         cy.url().should('include', `/${teamName}/channels/off-topic`);
         cy.get('#channelHeaderTitle').should('contain', 'Off-Topic');
         cy.get('.SidebarChannel.active:contains(Off-Topic)').should('be.visible');

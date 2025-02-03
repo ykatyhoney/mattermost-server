@@ -4,8 +4,8 @@
 package app
 
 import (
-	"github.com/mattermost/mattermost-server/v6/server/channels/einterfaces"
-	ejobs "github.com/mattermost/mattermost-server/v6/server/channels/einterfaces/jobs"
+	"github.com/mattermost/mattermost/server/v8/einterfaces"
+	ejobs "github.com/mattermost/mattermost/server/v8/einterfaces/jobs"
 )
 
 var accountMigrationInterface func(*App) einterfaces.AccountMigrationInterface
@@ -74,16 +74,28 @@ func RegisterCloudInterface(f func(*Server) einterfaces.CloudInterface) {
 	cloudInterface = f
 }
 
-var samlInterfaceNew func(*App) einterfaces.SamlInterface
+var samlInterface func(*App) einterfaces.SamlInterface
 
-func RegisterNewSamlInterface(f func(*App) einterfaces.SamlInterface) {
-	samlInterfaceNew = f
+func RegisterSamlInterface(f func(*App) einterfaces.SamlInterface) {
+	samlInterface = f
 }
 
 var notificationInterface func(*App) einterfaces.NotificationInterface
 
 func RegisterNotificationInterface(f func(*App) einterfaces.NotificationInterface) {
 	notificationInterface = f
+}
+
+var outgoingOauthConnectionInterface func(*App) einterfaces.OutgoingOAuthConnectionInterface
+
+func RegisterOutgoingOAuthConnectionInterface(f func(*App) einterfaces.OutgoingOAuthConnectionInterface) {
+	outgoingOauthConnectionInterface = f
+}
+
+var ipFilteringInterface func(*App) einterfaces.IPFilteringInterface
+
+func RegisterIPFilteringInterface(f func(*App) einterfaces.IPFilteringInterface) {
+	ipFilteringInterface = f
 }
 
 func (s *Server) initEnterprise() {

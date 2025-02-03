@@ -3,11 +3,17 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import {AdminConfig} from '@mattermost/types/config';
-import {useIntl} from 'react-intl';
+import type {useIntl} from 'react-intl';
+
+import type {AdminConfig} from '@mattermost/types/config';
+
+import {Client4} from 'mattermost-redux/client';
+
 import {ConsolePages, DocLinks} from 'utils/constants';
-import {ItemModel, ItemStatus, Options} from '../dashboard.type';
+
 import {impactModifiers} from '../dashboard.data';
+import {ItemStatus} from '../dashboard.type';
+import type {ItemModel, Options} from '../dashboard.type';
 
 /**
  *
@@ -70,6 +76,73 @@ const sessionLength = (
     };
 };
 
+/**
+ *
+ * @description This checks to see if Mattermost is running as root.
+ */
+const rootUserCheck = async (
+    config: Partial<AdminConfig>,
+    formatMessage: ReturnType<typeof useIntl>['formatMessage'],
+    options: Options,
+) => {
+    const fetchRootStatus = async () => {
+        const result = await Client4.ping(true);
+        return result.root_status ? ItemStatus.WARNING : ItemStatus.OK;
+    };
+
+    const status = await fetchRootStatus();
+
+    return {
+        id: 'root_status,',
+        title: formatMessage({
+            id: 'admin.reporting.workspace_optimization.configuration.root_status.title',
+            defaultMessage: 'Mattermost is running as root',
+        }),
+        description: formatMessage({
+            id: 'admin.reporting.workspace_optimization.configuration.root_status.description',
+            defaultMessage: 'Running Mattermost as root is not recommended. Please use a non-root user.',
+        }),
+        telemetryAction: 'root_status',
+        status,
+        scoreImpact: 25,
+        impactModifier: impactModifiers[status],
+    };
+};
+
+const fileStorage = async (
+    config: Partial<AdminConfig>,
+    formatMessage: ReturnType<typeof useIntl>['formatMessage'],
+    options: Options,
+) => {
+    const testFileStorage = async () => {
+        const pingResponse = await Client4.ping(true);
+
+        return pingResponse.filestore_status === 'OK' ? ItemStatus.OK : ItemStatus.ERROR;
+    };
+
+    const status = await testFileStorage();
+
+    return {
+        id: 'file_storage,',
+        title: formatMessage({
+            id: 'admin.reporting.workspace_optimization.configuration.file_storage.title',
+            defaultMessage: 'File storage access is faulty.',
+        }),
+        description: formatMessage({
+            id: 'admin.reporting.workspace_optimization.configuration.file_storage.description',
+            defaultMessage: 'Check your file storage settings to ensure your Mattermost workspace has access to the configured file storage.',
+        }),
+        configUrl: ConsolePages.FILE_STORAGE,
+        configText: formatMessage({id: 'admin.reporting.workspace_optimization.configuration.file_storage.cta', defaultMessage: 'Config file storage'}),
+        infoUrl: DocLinks.FILE_STORAGE,
+        infoText: formatMessage({id: 'admin.reporting.workspace_optimization.cta.learnMore', defaultMessage: 'Learn more'}),
+        telemetryAction: 'file_storage',
+        status,
+        scoreImpact: 50,
+        impactModifier: impactModifiers[status],
+    };
+};
+
 export const runConfigChecks = async (
     config: Partial<AdminConfig>,
     formatMessage: ReturnType<typeof useIntl>['formatMessage'],
@@ -78,6 +151,8 @@ export const runConfigChecks = async (
     const checks = [
         ssl,
         sessionLength,
+        fileStorage,
+        rootUserCheck,
     ];
     const results = await Promise.all(checks.map((check) => check(config, formatMessage, options)));
     return results;

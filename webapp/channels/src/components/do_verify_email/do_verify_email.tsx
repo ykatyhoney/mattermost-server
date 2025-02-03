@@ -6,18 +6,16 @@ import {useIntl} from 'react-intl';
 import {useSelector, useDispatch} from 'react-redux';
 import {useLocation, useHistory} from 'react-router-dom';
 
+import {clearErrors, logError, LogErrorBarMode} from 'mattermost-redux/actions/errors';
+import {verifyUserEmail, getMe} from 'mattermost-redux/actions/users';
+import {getIsOnboardingFlowEnabled} from 'mattermost-redux/selectors/entities/preferences';
+import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
+
 import {redirectUserToDefaultTeam} from 'actions/global_actions';
 import {trackEvent} from 'actions/telemetry_actions.jsx';
 
-import LaptopAlertSVG from 'components/common/svg_images_components/laptop_alert_svg';
 import ColumnLayout from 'components/header_footer_route/content_layouts/column';
 import LoadingScreen from 'components/loading_screen';
-
-import {clearErrors, logError} from 'mattermost-redux/actions/errors';
-import {verifyUserEmail, getMe} from 'mattermost-redux/actions/users';
-import {getUseCaseOnboarding} from 'mattermost-redux/selectors/entities/preferences';
-import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {DispatchFunc} from 'mattermost-redux/types/actions';
 
 import {AnnouncementBarTypes, AnnouncementBarMessages, Constants} from 'utils/constants';
 import {getRoleFromTrackFlow} from 'utils/utils';
@@ -32,7 +30,7 @@ const enum VerifyStatus {
 
 const DoVerifyEmail = () => {
     const {formatMessage} = useIntl();
-    const dispatch = useDispatch<DispatchFunc>();
+    const dispatch = useDispatch();
     const history = useHistory();
     const {search} = useLocation();
 
@@ -40,7 +38,7 @@ const DoVerifyEmail = () => {
     const token = params.get('token') ?? '';
 
     const loggedIn = Boolean(useSelector(getCurrentUserId));
-    const useCaseOnboarding = useSelector(getUseCaseOnboarding);
+    const onboardingFlowEnabled = useSelector(getIsOnboardingFlowEnabled);
 
     const [verifyStatus, setVerifyStatus] = useState(VerifyStatus.PENDING);
     const [serverError, setServerError] = useState('');
@@ -52,7 +50,7 @@ const DoVerifyEmail = () => {
 
     const handleRedirect = () => {
         if (loggedIn) {
-            if (useCaseOnboarding) {
+            if (onboardingFlowEnabled) {
                 // need info about whether admin or not,
                 // and whether admin has already completed
                 // first time onboarding. Instead of fetching and orchestrating that here,
@@ -60,7 +58,6 @@ const DoVerifyEmail = () => {
                 history.push('/');
                 return;
             }
-
             redirectUserToDefaultTeam();
             return;
         }
@@ -94,7 +91,7 @@ const DoVerifyEmail = () => {
         dispatch(logError({
             message: AnnouncementBarMessages.EMAIL_VERIFIED,
             type: AnnouncementBarTypes.SUCCESS,
-        } as any, true));
+        } as any, {errorBarMode: LogErrorBarMode.Always}));
 
         trackEvent('settings', 'verify_email');
 
@@ -121,7 +118,6 @@ const DoVerifyEmail = () => {
                     <ColumnLayout
                         title={formatMessage({id: 'signup_user_completed.invalid_invite.title', defaultMessage: 'This invite link is invalid'})}
                         message={serverError}
-                        SVGElement={<LaptopAlertSVG/>}
                         extraContent={(
                             <div className='do-verify-body-content-button-container'>
                                 <button

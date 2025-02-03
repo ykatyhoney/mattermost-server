@@ -3,15 +3,7 @@
 
 import {connect} from 'react-redux';
 
-import {createSelector} from 'reselect';
-
-import {
-    getUser,
-    getCurrentUser,
-    getUserStatuses,
-    getCurrentUserId,
-} from 'mattermost-redux/selectors/entities/users';
-import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {
     getCurrentChannel,
     isCurrentChannelDefault,
@@ -20,15 +12,23 @@ import {
     isCurrentChannelArchived,
     getRedirectChannelNameForTeam,
 } from 'mattermost-redux/selectors/entities/channels';
+import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
+import {
+    getUser,
+    getCurrentUser,
+    getUserStatuses,
+    getCurrentUserId,
+} from 'mattermost-redux/selectors/entities/users';
 
 import {getPenultimateViewedChannelName} from 'selectors/local_storage';
+import {getChannelHeaderMenuPluginComponents} from 'selectors/plugins';
+
+import {getIsChannelBookmarksEnabled} from 'components/channel_bookmarks/utils';
 
 import {Constants} from 'utils/constants';
 import * as Utils from 'utils/utils';
 
-import {getChannelHeaderMenuPluginComponents} from 'selectors/plugins';
-
-import {GlobalState} from 'types/store';
+import type {GlobalState} from 'types/store';
 
 import Desktop from './channel_header_dropdown';
 import Items from './channel_header_dropdown_items';
@@ -39,7 +39,7 @@ const getTeammateId = createSelector(
     getCurrentChannel,
     getCurrentUserId,
     (channel, currentUserId) => {
-        if (channel.type !== Constants.DM_CHANNEL) {
+        if (channel?.type !== Constants.DM_CHANNEL) {
             return null;
         }
 
@@ -71,6 +71,7 @@ const mapStateToProps = (state: GlobalState) => ({
     penultimateViewedChannelName: getPenultimateViewedChannelName(state) || getRedirectChannelNameForTeam(state, getCurrentTeamId(state)),
     pluginMenuItems: getChannelHeaderMenuPluginComponents(state),
     isLicensedForLDAPGroups: state.entities.general.license.LDAPGroups === 'true',
+    isChannelBookmarksEnabled: getIsChannelBookmarksEnabled(state),
 });
 
 const mobileMapStateToProps = (state: GlobalState) => {

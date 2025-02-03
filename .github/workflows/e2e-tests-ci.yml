@@ -1,61 +1,17 @@
-name: mattermost-e2e-tests
+---
+name: E2E Smoketests
 on:
-  pull_request:
-  push:
-    branches:
-      - master
-      - mono-repo*
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !contains( github.ref , 'heads/ref/master') }}
-defaults:
-  run:
-    shell: bash
+  # For PRs, this workflow gets triggered from the Argo Events platform.
+  # Check the following repo for details: https://github.com/mattermost/delivery-platform
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        type: string
+        required: true
+
 jobs:
-  cypress-check:
-    runs-on: ubuntu-22.04
-    defaults:
-      run:
-        working-directory: e2e-tests/cypress
-    steps:
-      - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
-      - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
-        id: setup_node
-        with:
-          node-version-file: ".nvmrc"
-          cache: npm
-          cache-dependency-path: 'e2e-tests/cypress/package-lock.json'
-      - name: ci/cypress/npm-install
-        run: |
-          npm ci
-      - name: ci/cypress/npm-check
-        run: |
-          npm run check
-  playwright-check:
-    runs-on: ubuntu-22.04
-    defaults:
-      run:
-        working-directory: e2e-tests/playwright
-    steps:
-      - name: ci/checkout-repo
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
-      - name: ci/setup-node
-        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # v3.6.0
-        id: setup_node
-        with:
-          node-version-file: ".nvmrc"
-          cache: npm
-          cache-dependency-path: 'e2e-tests/playwright/package-lock.json'
-      - name: ci/get-webapp-node-modules
-        working-directory: webapp
-        # requires build of client and types
-        run: |
-          make node_modules
-      - name: ci/playwright/npm-install
-        run: |
-          npm ci
-      - name: ci/playwright/npm-check
-        run: |
-          npm run check
+  e2e-smoketest:
+    uses: ./.github/workflows/e2e-tests-ci-template.yml
+    with:
+      commit_sha: "${{ inputs.commit_sha }}"
+      status_check_context: "E2E Tests/smoketests"

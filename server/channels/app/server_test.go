@@ -24,13 +24,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/platform"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils/fileutils"
-	"github.com/mattermost/mattermost-server/v6/server/config"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/filestore"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/app/platform"
+	"github.com/mattermost/mattermost/server/v8/channels/utils/fileutils"
+	"github.com/mattermost/mattermost/server/v8/config"
+	"github.com/mattermost/mattermost/server/v8/platform/shared/filestore"
 )
+
+func newServer(t *testing.T) (*Server, error) {
+	return newServerWithConfig(t, func(_ *model.Config) {})
+}
 
 func newServerWithConfig(t *testing.T, f func(cfg *model.Config)) (*Server, error) {
 	configStore, err := config.NewMemoryStore()
@@ -38,9 +42,13 @@ func newServerWithConfig(t *testing.T, f func(cfg *model.Config)) (*Server, erro
 	store, err := config.NewStoreFromBacking(configStore, nil, false)
 	require.NoError(t, err)
 	cfg := store.Get()
+	*cfg.AnnouncementSettings.AdminNoticesEnabled = false
+	*cfg.AnnouncementSettings.UserNoticesEnabled = false
+	cfg.SqlSettings = *mainHelper.GetSQLSettings()
 	f(cfg)
 
-	store.Set(cfg)
+	_, _, err = store.Set(cfg)
+	require.NoError(t, err)
 
 	return NewServer(ConfigStore(store))
 }
@@ -54,18 +62,19 @@ func TestStartServerSuccess(t *testing.T) {
 	serverErr := s.Start()
 
 	client := &http.Client{}
-	checkEndpoint(t, client, "http://localhost:"+strconv.Itoa(s.ListenAddr.Port)+"/")
+	err = checkEndpoint(t, client, "http://localhost:"+strconv.Itoa(s.ListenAddr.Port)+"/")
+	require.NoError(t, err)
 
 	s.Shutdown()
 	require.NoError(t, serverErr)
 }
 
 func TestStartServerPortUnavailable(t *testing.T) {
-	s, err := NewServer()
-	require.NoError(t, err)
-
 	// Listen on the next available port
 	listener, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
+
+	s, err := newServer(t)
 	require.NoError(t, err)
 
 	// Attempt to listen on the port used above.
@@ -95,16 +104,19 @@ func TestStartServerNoS3Bucket(t *testing.T) {
 
 	cfg := store.Get()
 	cfg.FileSettings = model.FileSettings{
-		DriverName:              model.NewString(model.ImageDriverS3),
-		AmazonS3AccessKeyId:     model.NewString(model.MinioAccessKey),
-		AmazonS3SecretAccessKey: model.NewString(model.MinioSecretKey),
-		AmazonS3Bucket:          model.NewString("nosuchbucket"),
-		AmazonS3Endpoint:        model.NewString(s3Endpoint),
-		AmazonS3Region:          model.NewString(""),
-		AmazonS3PathPrefix:      model.NewString(""),
-		AmazonS3SSL:             model.NewBool(false),
+		DriverName:              model.NewPointer(model.ImageDriverS3),
+		AmazonS3AccessKeyId:     model.NewPointer(model.MinioAccessKey),
+		AmazonS3SecretAccessKey: model.NewPointer(model.MinioSecretKey),
+		AmazonS3Bucket:          model.NewPointer("nosuchbucket"),
+		AmazonS3Endpoint:        model.NewPointer(s3Endpoint),
+		AmazonS3Region:          model.NewPointer(""),
+		AmazonS3PathPrefix:      model.NewPointer(""),
+		AmazonS3SSL:             model.NewPointer(false),
 	}
 	*cfg.ServiceSettings.ListenAddress = "localhost:0"
+	*cfg.AnnouncementSettings.AdminNoticesEnabled = false
+	*cfg.AnnouncementSettings.UserNoticesEnabled = false
+	cfg.SqlSettings = *mainHelper.GetSQLSettings()
 	_, _, err := store.Set(cfg)
 	require.NoError(t, err)
 
@@ -145,38 +157,11 @@ func TestStartServerTLSSuccess(t *testing.T) {
 	}
 
 	client := &http.Client{Transport: tr}
-	checkEndpoint(t, client, "https://localhost:"+strconv.Itoa(s.ListenAddr.Port)+"/")
+	err = checkEndpoint(t, client, "https://localhost:"+strconv.Itoa(s.ListenAddr.Port)+"/")
+	require.NoError(t, err)
 
 	s.Shutdown()
 	require.NoError(t, serverErr)
-}
-
-func TestDatabaseTypeAndMattermostVersion(t *testing.T) {
-	sqlDrivernameEnvironment := os.Getenv("MM_SQLSETTINGS_DRIVERNAME")
-
-	if sqlDrivernameEnvironment != "" {
-		defer os.Setenv("MM_SQLSETTINGS_DRIVERNAME", sqlDrivernameEnvironment)
-	} else {
-		defer os.Unsetenv("MM_SQLSETTINGS_DRIVERNAME")
-	}
-
-	os.Setenv("MM_SQLSETTINGS_DRIVERNAME", "postgres")
-
-	th := Setup(t)
-	defer th.TearDown()
-
-	databaseType, mattermostVersion := th.Server.DatabaseTypeAndSchemaVersion()
-	assert.Equal(t, "postgres", databaseType)
-	assert.GreaterOrEqual(t, mattermostVersion, strconv.Itoa(1))
-
-	os.Setenv("MM_SQLSETTINGS_DRIVERNAME", "mysql")
-
-	th2 := Setup(t)
-	defer th2.TearDown()
-
-	databaseType, mattermostVersion = th2.Server.DatabaseTypeAndSchemaVersion()
-	assert.Equal(t, "mysql", databaseType)
-	assert.GreaterOrEqual(t, mattermostVersion, strconv.Itoa(1))
 }
 
 func TestStartServerTLSVersion(t *testing.T) {
@@ -185,13 +170,17 @@ func TestStartServerTLSVersion(t *testing.T) {
 	cfg := store.Get()
 	testDir, _ := fileutils.FindDir("tests")
 
+	*cfg.AnnouncementSettings.AdminNoticesEnabled = false
+	*cfg.AnnouncementSettings.UserNoticesEnabled = false
 	*cfg.ServiceSettings.ListenAddress = "localhost:0"
 	*cfg.ServiceSettings.ConnectionSecurity = "TLS"
 	*cfg.ServiceSettings.TLSMinVer = "1.2"
 	*cfg.ServiceSettings.TLSKeyFile = path.Join(testDir, "tls_test_key.pem")
 	*cfg.ServiceSettings.TLSCertFile = path.Join(testDir, "tls_test_cert.pem")
+	cfg.SqlSettings = *mainHelper.GetSQLSettings()
 
-	store.Set(cfg)
+	_, _, err := store.Set(cfg)
+	require.NoError(t, err)
 
 	s, err := NewServer(ConfigStore(store))
 	require.NoError(t, err)
@@ -303,22 +292,30 @@ func TestPanicLog(t *testing.T) {
 	logger, _ := mlog.NewLogger()
 
 	logSettings := model.NewLogSettings()
-	logSettings.EnableConsole = model.NewBool(true)
-	logSettings.ConsoleJson = model.NewBool(true)
-	logSettings.EnableFile = model.NewBool(true)
+	logSettings.EnableConsole = model.NewPointer(true)
+	logSettings.ConsoleJson = model.NewPointer(true)
+	logSettings.EnableFile = model.NewPointer(true)
 	logSettings.FileLocation = &tmpDir
 	logSettings.FileLevel = &mlog.LvlInfo.Name
 
-	cfg, err := config.MloggerConfigFromLoggerConfig(logSettings, nil, config.GetLogFileLocation)
+	logCfg, err := config.MloggerConfigFromLoggerConfig(logSettings, nil, config.GetLogFileLocation)
 	require.NoError(t, err)
-	err = logger.ConfigureTargets(cfg, nil)
+	err = logger.ConfigureTargets(logCfg, nil)
 	require.NoError(t, err)
 	logger.LockConfiguration()
 
-	// Creating a server with logger
-	s, err := NewServer()
+	configStore, err := config.NewMemoryStore()
 	require.NoError(t, err)
-	s.Platform().SetLogger(logger)
+	store, err := config.NewStoreFromBacking(configStore, nil, false)
+	require.NoError(t, err)
+	cfg := store.Get()
+	cfg.SqlSettings = *mainHelper.GetSQLSettings()
+	_, _, err = store.Set(cfg)
+	require.NoError(t, err)
+
+	// Creating a server with logger
+	s, err := NewServer(ConfigStore(store), SetLogger(logger))
+	require.NoError(t, err)
 
 	// Route for just panicking
 	s.Router.HandleFunc("/panic", func(writer http.ResponseWriter, request *http.Request) {
@@ -342,7 +339,8 @@ func TestPanicLog(t *testing.T) {
 	}
 
 	client := &http.Client{Transport: tr}
-	client.Get("https://localhost:" + strconv.Itoa(s.ListenAddr.Port) + "/panic")
+	_, err = client.Get("https://localhost:" + strconv.Itoa(s.ListenAddr.Port) + "/panic")
+	require.Error(t, err)
 
 	err = logger.Flush()
 	assert.NoError(t, err, "flush should succeed")
@@ -388,6 +386,22 @@ func TestSentry(t *testing.T) {
 	}}
 	testDir, _ := fileutils.FindDir("tests")
 
+	setSentryDSN := func(t *testing.T, dsn *sentry.Dsn) {
+		os.Setenv("MM_SERVICEENVIRONMENT", model.ServiceEnvironmentTest)
+
+		// Allow Playbooks to startup
+		oldBuildHash := model.BuildHash
+		model.BuildHash = "dev"
+
+		oldSentryDSN := SentryDSN
+		SentryDSN = dsn.String()
+		t.Cleanup(func() {
+			os.Unsetenv("MM_SERVICEENVIRONMENT")
+			model.BuildHash = oldBuildHash
+			SentryDSN = oldSentryDSN
+		})
+	}
+
 	t.Run("sentry is disabled, should not receive a report", func(t *testing.T) {
 		data := make(chan bool, 1)
 
@@ -401,7 +415,7 @@ func TestSentry(t *testing.T) {
 		_, port, _ := net.SplitHostPort(server.Listener.Addr().String())
 		dsn, err := sentry.NewDsn(fmt.Sprintf("http://test:test@localhost:%s/123", port))
 		require.NoError(t, err)
-		SentryDSN = dsn.String()
+		setSentryDSN(t, dsn)
 
 		s, err := newServerWithConfig(t, func(cfg *model.Config) {
 			*cfg.ServiceSettings.ListenAddress = "localhost:0"
@@ -428,7 +442,7 @@ func TestSentry(t *testing.T) {
 		select {
 		case <-data:
 			require.Fail(t, "Sentry received a message, even though it's disabled!")
-		case <-time.After(time.Second):
+		case <-time.After(2 * time.Second):
 			t.Log("Sentry request didn't arrive. Good!")
 		}
 	})
@@ -445,7 +459,7 @@ func TestSentry(t *testing.T) {
 		_, port, _ := net.SplitHostPort(server.Listener.Addr().String())
 		dsn, err := sentry.NewDsn(fmt.Sprintf("http://test:test@localhost:%s/123", port))
 		require.NoError(t, err)
-		SentryDSN = dsn.String()
+		setSentryDSN(t, dsn)
 
 		s, err := newServerWithConfig(t, func(cfg *model.Config) {
 			*cfg.ServiceSettings.ListenAddress = "localhost:0"
@@ -486,4 +500,63 @@ func TestCancelTaskSetsTaskToNil(t *testing.T) {
 	cancelTask(&taskMut, &task)
 	require.Nil(t, task)
 	require.NotPanics(t, func() { cancelTask(&taskMut, &task) })
+}
+
+func TestOriginChecker(t *testing.T) {
+	th := Setup(t)
+	defer th.TearDown()
+
+	th.App.UpdateConfig(func(cfg *model.Config) {
+		*cfg.ServiceSettings.AllowCorsFrom = ""
+	})
+
+	tcs := []struct {
+		SiteURL      string
+		HeaderScheme string
+		HeaderHost   string
+		Pass         bool
+	}{
+		{
+			HeaderHost:   "test.com",
+			HeaderScheme: "https://",
+			SiteURL:      "https://test.com",
+			Pass:         true,
+		},
+		{
+			HeaderHost:   "test.com",
+			HeaderScheme: "http://",
+			SiteURL:      "https://test.com",
+			Pass:         false,
+		},
+		{
+			HeaderHost:   "test.com",
+			HeaderScheme: "https://",
+			SiteURL:      "https://www.test.com",
+			Pass:         false,
+		},
+		{
+			HeaderHost:   "example.com",
+			HeaderScheme: "http://",
+			SiteURL:      "http://test.com",
+			Pass:         false,
+		},
+		{
+			HeaderHost:   "null",
+			HeaderScheme: "",
+			SiteURL:      "http://test.com",
+			Pass:         false,
+		},
+	}
+
+	for i, tc := range tcs {
+		th.App.UpdateConfig(func(cfg *model.Config) {
+			*cfg.ServiceSettings.SiteURL = tc.SiteURL
+		})
+
+		r := &http.Request{
+			Header: http.Header{"Origin": []string{fmt.Sprintf("%s%s", tc.HeaderScheme, tc.HeaderHost)}},
+		}
+		res := th.App.OriginChecker()(r)
+		require.Equalf(t, tc.Pass, res, "Test case (%d)", i)
+	}
 }

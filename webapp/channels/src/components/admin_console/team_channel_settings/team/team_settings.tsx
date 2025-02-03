@@ -2,10 +2,10 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {FormattedMessage} from 'react-intl';
+import {FormattedMessage, defineMessage} from 'react-intl';
 
-import {t} from 'utils/i18n';
 import TeamList from 'components/admin_console/team_channel_settings/team/list';
+import AdminHeader from 'components/widgets/admin_console/admin_header';
 import AdminPanel from 'components/widgets/admin_console/admin_panel';
 
 type Props = {
@@ -15,22 +15,20 @@ type Props = {
 export function TeamsSettings(props: Props) {
     return (
         <div className='wrapper--fixed'>
-            <div className='admin-console__header'>
+            <AdminHeader>
                 <FormattedMessage
                     id='admin.team_settings.groupsPageTitle'
                     defaultMessage='{siteName} Teams'
                     values={{siteName: props.siteName}}
                 />
-            </div>
+            </AdminHeader>
 
             <div className='admin-console__wrapper'>
                 <div className='admin-console__content'>
                     <AdminPanel
                         id='teams'
-                        titleId={t('admin.team_settings.title')}
-                        titleDefault='Teams'
-                        subtitleId={t('admin.team_settings.description')}
-                        subtitleDefault='Manage team settings.'
+                        title={defineMessage({id: 'admin.team_settings.title', defaultMessage: 'Teams'})}
+                        subtitle={defineMessage({id: 'admin.team_settings.description', defaultMessage: 'Manage team settings.'})}
                     >
                         <TeamList/>
                     </AdminPanel>

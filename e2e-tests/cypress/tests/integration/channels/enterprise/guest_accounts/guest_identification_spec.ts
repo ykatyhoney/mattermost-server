@@ -22,6 +22,7 @@ import {
     reUrl,
     verifyEmailBody,
 } from '../../../../utils';
+import {UserProfile} from '@mattermost/types/users';
 
 describe('Guest Accounts', () => {
     let sysadmin: Cypress.UserProfile;
@@ -40,7 +41,7 @@ describe('Guest Accounts', () => {
         });
 
         // # Log in as a team admin.
-        cy.apiAdminLogin().then((user) => {
+        cy.apiAdminLogin().then(({user}: {user: UserProfile}) => {
             sysadmin = user;
         });
     });
@@ -119,7 +120,7 @@ describe('Guest Accounts', () => {
             children().should('have.length', 1).
             eq(0).should('contain', testChannel.name).click();
 
-        cy.get('#inviteGuestButton').scrollIntoView().click();
+        cy.findByTestId('inviteButton').scrollIntoView().click();
         cy.findByTestId('confirm-done').should('be.visible').click();
 
         // # Get invitation link.

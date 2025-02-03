@@ -1,8 +1,9 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
+import {Button} from 'react-bootstrap';
 
 import PermissionGroup from 'components/admin_console/permission_schemes_settings/permission_group';
 
@@ -106,6 +107,26 @@ describe('components/admin_console/permission_schemes_settings/permission_group'
             <PermissionGroup
                 {...defaultProps}
                 parentRole={{permissions: ['invite_user', 'add_user_to_team']}}
+            />,
+        );
+        expect(wrapper).toMatchSnapshot();
+    });
+
+    test('should match snapshot with additional values', () => {
+        const ADDITIONAL_VALUES = {
+            edit_post: {
+                editTimeLimitButton: (
+                    <Button
+                        onClick={jest.fn()}
+                    />
+                ),
+            },
+        };
+
+        const wrapper = shallow(
+            <PermissionGroup
+                {...defaultProps}
+                additionalValues={ADDITIONAL_VALUES}
             />,
         );
         expect(wrapper).toMatchSnapshot();

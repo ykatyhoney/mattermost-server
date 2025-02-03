@@ -1,24 +1,15 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Posts, Preferences, Permissions} from '../constants';
+import type {Channel} from '@mattermost/types/channels';
+import type {Post, PostType, PostMetadata, PostEmbed} from '@mattermost/types/posts';
+import type {GlobalState} from '@mattermost/types/store';
+import type {Team} from '@mattermost/types/teams';
+import type {UserProfile} from '@mattermost/types/users';
+
 import {haveIChannelPermission} from 'mattermost-redux/selectors/entities/roles';
 
-import {GlobalState} from '@mattermost/types/store';
-import {PreferenceType} from '@mattermost/types/preferences';
-import {Post, PostType, PostMetadata, PostEmbed} from '@mattermost/types/posts';
-import {UserProfile} from '@mattermost/types/users';
-import {Team} from '@mattermost/types/teams';
-import {Channel} from '@mattermost/types/channels';
-
-import {getPreferenceKey} from './preference_utils';
-
-export function isPostFlagged(postId: Post['id'], myPreferences: {
-    [x: string]: PreferenceType;
-}): boolean {
-    const key = getPreferenceKey(Preferences.CATEGORY_FLAGGED_POST, postId);
-    return myPreferences.hasOwnProperty(key);
-}
+import {Posts, Preferences, Permissions} from '../constants';
 
 export function isSystemMessage(post: Post): boolean {
     return Boolean(post.type && post.type.startsWith(Posts.SYSTEM_MESSAGE_PREFIX));
@@ -29,7 +20,7 @@ export function isMeMessage(post: Post): boolean {
 }
 
 export function isFromWebhook(post: Post): boolean {
-    return post.props && post.props.from_webhook;
+    return post.props?.from_webhook === 'true';
 }
 
 export function isPostEphemeral(post: Post): boolean {
@@ -37,8 +28,8 @@ export function isPostEphemeral(post: Post): boolean {
 }
 
 export function isUserAddedInChannel(post: Post, userId?: UserProfile['id']): boolean {
-    const postTypeCheck = post.type && (post.type === Posts.POST_TYPES.ADD_TO_CHANNEL);
-    const userIdCheck = post.props && post.props.addedUserId && (post.props.addedUserId === userId);
+    const postTypeCheck = Boolean(post.type && (post.type === Posts.POST_TYPES.ADD_TO_CHANNEL));
+    const userIdCheck = Boolean(post.props && post.props.addedUserId && (post.props.addedUserId === userId));
     return postTypeCheck && userIdCheck;
 }
 
@@ -105,7 +96,11 @@ const joinLeavePostTypes = [
     Posts.POST_TYPES.COMBINED_USER_ACTIVITY,
 ];
 
-// Returns true if a post should be hidden when the user has Show Join/Leave Messages disabled
+/**
+ * If the user has "Show Join/Leave Messages" disabled, this function will return true if the post should be hidden if it's of type join/leave.
+ * The post object passed in must be not null/undefined.
+ * @returns Returns true if a post should be hidden
+ */
 export function shouldFilterJoinLeavePost(post: Post, showJoinLeave: boolean, currentUsername: string): boolean {
     if (showJoinLeave) {
         return false;
@@ -174,7 +169,7 @@ export function isPostCommentMention({post, currentUser, threadRepliedToByCurren
         commentsNotifyLevel = currentUser.notify_props.comments;
     }
 
-    const notCurrentUser = post.user_id !== currentUser.id || (post.props && post.props.from_webhook);
+    const notCurrentUser = post.user_id !== currentUser.id || isFromWebhook(post);
     if (notCurrentUser) {
         if (commentsNotifyLevel === Preferences.COMMENTS_ANY && (threadCreatedByCurrentUser || threadRepliedToByCurrentUser)) {
             isCommentMention = true;
@@ -245,4 +240,16 @@ export function shouldUpdatePost(receivedPost: Post, storedPost?: Post): boolean
 
     // The stored post is older than the one we've received
     return true;
+}
+
+export function ensureString(v: unknown) {
+    return typeof v === 'string' ? v : '';
+}
+
+export function ensureNumber(v: unknown) {
+    return typeof v === 'number' ? v : 0;
+}
+
+export function secureGetFromRecord<T>(v: Record<string, T> | undefined, key: string) {
+    return typeof v === 'object' && v && Object.hasOwn(v, key) ? v[key] : undefined;
 }

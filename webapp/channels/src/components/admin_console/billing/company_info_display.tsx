@@ -6,11 +6,11 @@ import {FormattedMessage} from 'react-intl';
 import {useSelector} from 'react-redux';
 
 import {trackEvent} from 'actions/telemetry_actions';
+
 import BlockableLink from 'components/admin_console/blockable_link';
-import FormattedMarkdownMessage from 'components/formatted_markdown_message';
 import CompanySvg from 'components/common/svg_images_components/company_svg';
 
-import {GlobalState} from 'types/store';
+import type {GlobalState} from 'types/store';
 
 import './company_info_display.scss';
 
@@ -74,7 +74,7 @@ const CompanyInfoDisplay: React.FC = () => {
                     </div>
                     {Boolean(companyInfo.num_employees) &&
                         <div className='CompanyInfoDisplay__companyInfo-numEmployees'>
-                            <FormattedMarkdownMessage
+                            <FormattedMessage
                                 id='admin.billing.company_info.employees'
                                 defaultMessage='{employees} employees'
                                 values={{employees: companyInfo.num_employees}}

@@ -1,34 +1,39 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
+import classNames from 'classnames';
 import React from 'react';
 import {Modal} from 'react-bootstrap';
+import {FormattedMessage} from 'react-intl';
 
-import classNames from 'classnames';
-
-import {FileInfo} from '@mattermost/types/files';
-import {Post} from '@mattermost/types/posts';
+import type {FileInfo} from '@mattermost/types/files';
+import type {Post} from '@mattermost/types/posts';
 
 import {getFileDownloadUrl, getFilePreviewUrl, getFileUrl} from 'mattermost-redux/utils/file_utils';
+
+import ArchivedPreview from 'components/archived_preview';
+import AudioVideoPreview from 'components/audio_video_preview';
+import CodePreview from 'components/code_preview';
+import FileInfoPreview from 'components/file_info_preview';
 import LoadingImagePreview from 'components/loading_image_preview';
+import type {Props as PDFPreviewComponentProps} from 'components/pdf_preview';
+
 import Constants, {FileTypes, ZoomSettings} from 'utils/constants';
 import * as Keyboard from 'utils/keyboard';
 import * as Utils from 'utils/utils';
-import AudioVideoPreview from 'components/audio_video_preview';
-import CodePreview from 'components/code_preview';
-import ArchivedPreview from 'components/archived_preview';
-import FileInfoPreview from 'components/file_info_preview';
 
-import {FilePreviewComponent} from 'types/store/plugins';
+import type {FilePreviewComponent} from 'types/store/plugins';
 
-import ImagePreview from './image_preview';
-import './file_preview_modal.scss';
 import FilePreviewModalFooter from './file_preview_modal_footer/file_preview_modal_footer';
 import FilePreviewModalHeader from './file_preview_modal_header/file_preview_modal_header';
+import ImagePreview from './image_preview';
 import PopoverBar from './popover_bar';
-import {LinkInfo, isFileInfo} from './types';
+import {isFileInfo} from './types';
+import type {LinkInfo} from './types';
 
-const PDFPreview = React.lazy(() => import('components/pdf_preview'));
+import './file_preview_modal.scss';
+
+const PDFPreview = React.lazy<React.ComponentType<PDFPreviewComponentProps>>(() => import('components/pdf_preview'));
 
 const KeyCodes = Constants.KeyCodes;
 
@@ -323,7 +328,7 @@ export default class FilePreviewModal extends React.PureComponent<Props, State> 
                         >
                             <React.Suspense fallback={null}>
                                 <PDFPreview
-                                    fileInfo={fileInfo}
+                                    fileInfo={fileInfo as FileInfo}
                                     fileUrl={fileUrl}
                                     scale={this.state.scale[this.state.imageIndex]}
                                     handleBgClose={this.handleBgClose}
@@ -361,12 +366,16 @@ export default class FilePreviewModal extends React.PureComponent<Props, State> 
                 }
             } else {
                 // display a progress indicator when the preview for an image is still loading
-                const loading = Utils.localizeMessage('view_image.loading', 'Loading');
                 const progress = Math.floor(this.state.progress[this.state.imageIndex]);
 
                 content = (
                     <LoadingImagePreview
-                        loading={loading}
+                        loading={
+                            <FormattedMessage
+                                id='view_image.loading'
+                                defaultMessage='Loading'
+                            />
+                        }
                         progress={progress}
                     />
                 );
@@ -397,7 +406,7 @@ export default class FilePreviewModal extends React.PureComponent<Props, State> 
                 dialogClassName={dialogClassName}
                 animation={true}
                 backdrop={false}
-                role='dialog'
+                role='none'
                 style={{paddingLeft: 0}}
                 aria-labelledby='viewImageModalLabel'
             >

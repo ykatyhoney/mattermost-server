@@ -2,48 +2,23 @@
 // See LICENSE.txt for license information.
 
 import {Client4} from 'mattermost-redux/client';
-import {getClientConfig, getLicenseConfig} from 'mattermost-redux/actions/general';
-import {loadMe, loadMeREST} from 'mattermost-redux/actions/users';
-import {DispatchFunc, GetStateFunc} from 'mattermost-redux/types/actions';
-import {GlobalState} from 'types/store';
 
 import {getCurrentLocale, getTranslations} from 'selectors/i18n';
-import {Translations} from 'types/store/i18n';
-import {ActionTypes} from 'utils/constants';
+
 import en from 'i18n/en.json';
+import {ActionTypes} from 'utils/constants';
+
+import type {ActionFuncAsync, ThunkActionFunc} from 'types/store';
+import type {Translations} from 'types/store/i18n';
 
 const pluginTranslationSources: Record<string, TranslationPluginFunction> = {};
 
 export type TranslationPluginFunction = (locale: string) => Translations
 
-export function loadConfigAndMe() {
-    return async (dispatch: DispatchFunc) => {
-        const [{data: clientConfig}] = await Promise.all([
-            dispatch(getClientConfig()),
-            dispatch(getLicenseConfig()),
-        ]);
-
-        const isGraphQLEnabled = clientConfig && clientConfig.FeatureFlagGraphQL === 'true';
-
-        let isMeLoaded = false;
-        if (document.cookie.includes('MMUSERID=')) {
-            if (isGraphQLEnabled) {
-                const dataFromLoadMe = await dispatch(loadMe());
-                isMeLoaded = dataFromLoadMe?.data ?? false;
-            } else {
-                const dataFromLoadMeREST = await dispatch(loadMeREST());
-                isMeLoaded = dataFromLoadMeREST?.data ?? false;
-            }
-        }
-
-        return {data: isMeLoaded};
-    };
-}
-
-export function registerPluginTranslationsSource(pluginId: string, sourceFunction: TranslationPluginFunction) {
+export function registerPluginTranslationsSource(pluginId: string, sourceFunction: TranslationPluginFunction): ThunkActionFunc<void> {
     pluginTranslationSources[pluginId] = sourceFunction;
-    return (dispatch: DispatchFunc, getState: GetStateFunc) => {
-        const state = getState() as GlobalState;
+    return (dispatch, getState) => {
+        const state = getState();
         const locale = getCurrentLocale(state);
         const immutableTranslations = getTranslations(state, locale);
         const translations = {};
@@ -65,8 +40,8 @@ export function unregisterPluginTranslationsSource(pluginId: string) {
     Reflect.deleteProperty(pluginTranslationSources, pluginId);
 }
 
-export function loadTranslations(locale: string, url: string) {
-    return async (dispatch: DispatchFunc) => {
+export function loadTranslations(locale: string, url: string): ActionFuncAsync {
+    return async (dispatch) => {
         const translations = {...en};
         Object.values(pluginTranslationSources).forEach((pluginFunc) => {
             Object.assign(translations, pluginFunc(locale));
@@ -86,22 +61,6 @@ export function loadTranslations(locale: string, url: string) {
             data: {
                 locale,
                 translations,
-            },
-        });
-        return {data: true};
-    };
-}
-
-export function registerCustomPostRenderer(type: string, component: any, id: string) {
-    return async (dispatch: DispatchFunc) => {
-        // piggyback on plugins state to register a custom post renderer
-        dispatch({
-            type: ActionTypes.RECEIVED_PLUGIN_POST_COMPONENT,
-            data: {
-                postTypeId: id,
-                pluginId: id,
-                type,
-                component,
             },
         });
         return {data: true};

@@ -1,7 +1,8 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ComponentProps} from 'react';
+import React from 'react';
+import type {ComponentProps} from 'react';
 
 import {mountWithIntl} from 'tests/helpers/intl-test-helper';
 
@@ -52,9 +53,9 @@ describe('components/user_settings/notifications/ManageAutoResponder', () => {
         );
 
         expect(wrapper.find('#autoResponderActive').exists()).toBe(true);
-        expect(wrapper.find('#autoResponderMessageInput').exists()).toBe(true);
+        expect(wrapper.find('textarea#autoResponderMessageInput').exists()).toBe(true);
 
-        wrapper.find('#autoResponderMessageInput').simulate('change');
+        wrapper.find('textarea#autoResponderMessageInput').simulate('change');
         expect(setParentState).toBeCalled();
         expect(setParentState).toBeCalledWith('autoResponderMessage', 'Hello World!');
 

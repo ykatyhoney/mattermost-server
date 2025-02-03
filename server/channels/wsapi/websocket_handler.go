@@ -6,11 +6,11 @@ package wsapi
 import (
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/platform"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/i18n"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/i18n"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/app/platform"
 )
 
 func (api *API) APIWebSocketHandler(wh func(*model.WebSocketRequest) (map[string]any, *model.AppError)) webSocketHandler {
@@ -30,18 +30,17 @@ func (wh webSocketHandler) ServeWebSocket(conn *platform.WebConn, r *model.WebSo
 		return
 	}
 	session, sessionErr := wh.app.GetSession(conn.GetSessionToken())
-	defer wh.app.ReturnSessionToPool(session)
 
 	if sessionErr != nil {
 		mlog.Error(
 			"websocket session error",
 			mlog.String("action", r.Action),
-			mlog.Int64("seq", r.Seq),
+			mlog.Int("seq", r.Seq),
 			mlog.String("user_id", conn.UserId),
 			mlog.String("error_message", sessionErr.SystemMessage(i18n.T)),
 			mlog.Err(sessionErr),
 		)
-		sessionErr.DetailedError = ""
+		sessionErr.WipeDetailed()
 		errResp := model.NewWebSocketError(r.Seq, sessionErr)
 		hub.SendMessage(conn, errResp)
 		return
@@ -58,12 +57,12 @@ func (wh webSocketHandler) ServeWebSocket(conn *platform.WebConn, r *model.WebSo
 		mlog.Error(
 			"websocket request handling error",
 			mlog.String("action", r.Action),
-			mlog.Int64("seq", r.Seq),
+			mlog.Int("seq", r.Seq),
 			mlog.String("user_id", conn.UserId),
 			mlog.String("error_message", err.SystemMessage(i18n.T)),
 			mlog.Err(err),
 		)
-		err.DetailedError = ""
+		err.WipeDetailed()
 		errResp := model.NewWebSocketError(r.Seq, err)
 		hub.SendMessage(conn, errResp)
 		return

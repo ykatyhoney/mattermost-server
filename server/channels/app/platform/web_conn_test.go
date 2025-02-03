@@ -15,14 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 type hookRunner struct {
 }
 
-func (h *hookRunner) RunMultiHook(hookRunnerFunc func(hooks plugin.Hooks) bool, hookId int) {
+func (h *hookRunner) RunMultiHook(hookRunnerFunc func(hooks plugin.Hooks, _ *model.Manifest) bool, hookId int) {
 
 }
 func (h *hookRunner) HooksForPlugin(id string) (plugin.Hooks, error) {

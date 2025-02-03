@@ -3,26 +3,30 @@
 
 import React from 'react';
 
-import {Post, PostEmbed} from '@mattermost/types/posts';
+import {isAppBinding, type AppBinding} from '@mattermost/types/apps';
+import {isMessageAttachmentArray} from '@mattermost/types/message_attachments';
+import type {Post, PostEmbed} from '@mattermost/types/posts';
+import {isArrayOf} from '@mattermost/types/utilities';
 
+import {validateBindings} from 'mattermost-redux/utils/apps';
 import {getEmbedFromMetadata} from 'mattermost-redux/utils/post_utils';
-import {AppBinding} from '@mattermost/types/apps';
 
 import MessageAttachmentList from 'components/post_view/message_attachments/message_attachment_list';
 import PostAttachmentOpenGraph from 'components/post_view/post_attachment_opengraph';
 import PostImage from 'components/post_view/post_image';
+import PostMessagePreview from 'components/post_view/post_message_preview';
 import YoutubeVideo from 'components/youtube_video';
 
-import {PostWillRenderEmbedPluginComponent} from 'types/store/plugins';
-import EmbeddedBindings from '../embedded_bindings/embedded_bindings';
-import {TextFormattingOptions} from 'utils/text_formatting';
-import PostMessagePreview from 'components/post_view/post_message_preview';
+import webSocketClient from 'client/web_websocket_client';
+import type {TextFormattingOptions} from 'utils/text_formatting';
 
-import webSocketClient from 'client/web_websocket_client.jsx';
+import type {PostWillRenderEmbedComponent} from 'types/store/plugins';
+
+import EmbeddedBindings from '../embedded_bindings/embedded_bindings';
 
 export type Props = {
     post: Post;
-    pluginPostWillRenderEmbedComponents?: PostWillRenderEmbedPluginComponent[];
+    pluginPostWillRenderEmbedComponents?: PostWillRenderEmbedComponent[];
     children?: JSX.Element;
     isEmbedVisible?: boolean;
     options?: Partial<TextFormattingOptions>;
@@ -82,10 +86,7 @@ export default class PostBodyAdditionalContent extends React.PureComponent<Props
             );
 
         case 'message_attachment': {
-            let attachments = [];
-            if (this.props.post.props && this.props.post.props.attachments) {
-                attachments = this.props.post.props.attachments;
-            }
+            const attachments = isMessageAttachmentArray(this.props.post.props?.attachments) ? this.props.post.props?.attachments : [];
 
             return (
                 <MessageAttachmentList
@@ -126,7 +127,6 @@ export default class PostBodyAdditionalContent extends React.PureComponent<Props
                 return (
                     <PostMessagePreview
                         metadata={embed.data}
-                        previewPost={embed.data.post}
                         handleFileDropdownOpened={this.props.handleFileDropdownOpened}
                     />
                 );
@@ -153,16 +153,17 @@ export default class PostBodyAdditionalContent extends React.PureComponent<Props
         const embed = this.getEmbed();
 
         if (this.props.appsEnabled) {
-            if (hasValidEmbeddedBinding(this.props.post.props)) {
+            const appEmbeds = isArrayOf<AppBinding>(this.props.post.props?.app_bindings, isAppBinding) ? validateBindings(this.props.post.props?.app_bindings) : [];
+            if (appEmbeds.length) {
                 // TODO Put some log / message if the form is not valid?
                 return (
-                    <React.Fragment>
+                    <>
                         {this.props.children}
                         <EmbeddedBindings
-                            embeds={this.props.post.props.app_bindings}
+                            embeds={appEmbeds}
                             post={this.props.post}
                         />
-                    </React.Fragment>
+                    </>
                 );
             }
         }
@@ -183,22 +184,4 @@ export default class PostBodyAdditionalContent extends React.PureComponent<Props
 
         return this.props.children;
     }
-}
-
-function hasValidEmbeddedBinding(props: Record<string, any>) {
-    if (!props) {
-        return false;
-    }
-
-    if (!props.app_bindings) {
-        return false;
-    }
-
-    const embeds = props.app_bindings as AppBinding[];
-
-    if (!embeds.length) {
-        return false;
-    }
-
-    return true;
 }

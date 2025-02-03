@@ -5,13 +5,12 @@ package web
 
 import (
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const (
@@ -75,6 +74,7 @@ type Params struct {
 	NotAssociatedToChannel    string
 	Paginate                  *bool
 	IncludeMemberCount        bool
+	IncludeMemberIDs          bool
 	NotAssociatedToGroup      string
 	ExcludeDefaultChannels    bool
 	LimitAfter                int
@@ -83,17 +83,37 @@ type Params struct {
 	IncludeTotalCount         bool
 	IncludeDeleted            bool
 	FilterAllowReference      bool
+	FilterArchived            bool
 	FilterParentTeamPermitted bool
 	CategoryId                string
-	WarnMetricId              string
 	ExportName                string
 	ExcludePolicyConstrained  bool
 	GroupSource               model.GroupSource
 	FilterHasMember           string
 	IncludeChannelMemberCount string
+	OutgoingOAuthConnectionID string
+	ExcludeOffline            bool
+	InChannel                 string
+	NotInChannel              string
+	Topic                     string
+	CreatorId                 string
+	OnlyConfirmed             bool
+	OnlyPlugins               bool
+	IncludeUnconfirmed        bool
+	ExcludeConfirmed          bool
+	ExcludePlugins            bool
+	ExcludeHome               bool
+	ExcludeRemote             bool
+
+	//Bookmarks
+	ChannelBookmarkId string
+	BookmarksSince    int64
 
 	// Cloud
 	InvoiceId string
+
+	// Custom Profile Attributes
+	FieldId string
 }
 
 func ParamsFromRequest(r *http.Request) *Params {
@@ -120,7 +140,11 @@ func ParamsFromRequest(r *http.Request) *Params {
 	params.FileId = props["file_id"]
 	params.Filename = query.Get("filename")
 	params.UploadId = props["upload_id"]
-	params.PluginId = props["plugin_id"]
+	if val, ok := props["plugin_id"]; ok {
+		params.PluginId = val
+	} else {
+		params.PluginId = query.Get("plugin_id")
+	}
 	params.CommandId = props["command_id"]
 	params.HookId = props["hook_id"]
 	params.ReportId = props["report_id"]
@@ -143,6 +167,21 @@ func ParamsFromRequest(r *http.Request) *Params {
 	params.GroupId = props["group_id"]
 	params.RemoteId = props["remote_id"]
 	params.InvoiceId = props["invoice_id"]
+	params.OutgoingOAuthConnectionID = props["outgoing_oauth_connection_id"]
+	params.ExcludeOffline, _ = strconv.ParseBool(query.Get("exclude_offline"))
+	params.InChannel = query.Get("in_channel")
+	params.NotInChannel = query.Get("not_in_channel")
+	params.Topic = query.Get("topic")
+	params.CreatorId = query.Get("creator_id")
+	params.OnlyConfirmed, _ = strconv.ParseBool(query.Get("only_confirmed"))
+	params.OnlyPlugins, _ = strconv.ParseBool(query.Get("only_plugins"))
+	params.IncludeUnconfirmed, _ = strconv.ParseBool(query.Get("include_unconfirmed"))
+	params.ExcludeConfirmed, _ = strconv.ParseBool(query.Get("exclude_confirmed"))
+	params.ExcludePlugins, _ = strconv.ParseBool(query.Get("exclude_plugins"))
+	params.ExcludeHome, _ = strconv.ParseBool(query.Get("exclude_home"))
+	params.ExcludeRemote, _ = strconv.ParseBool(query.Get("exclude_remote"))
+	params.ChannelBookmarkId = props["bookmark_id"]
+	params.FieldId = props["field_id"]
 	params.Scope = query.Get("scope")
 
 	if val, err := strconv.Atoi(query.Get("page")); err != nil || val < 0 {
@@ -159,7 +198,15 @@ func ParamsFromRequest(r *http.Request) *Params {
 
 	params.TimeRange = query.Get("time_range")
 	params.Permanent, _ = strconv.ParseBool(query.Get("permanent"))
-	params.PerPage = getPerPageFromQuery(query)
+
+	val, err := strconv.Atoi(query.Get("per_page"))
+	if err != nil || val < 0 {
+		params.PerPage = PerPageDefault
+	} else if val > PerPageMaximum {
+		params.PerPage = PerPageMaximum
+	} else {
+		params.PerPage = val
+	}
 
 	if val, err := strconv.Atoi(query.Get("logs_per_page")); err != nil || val < 0 {
 		params.LogsPerPage = LogsPerPageDefault
@@ -208,6 +255,7 @@ func ParamsFromRequest(r *http.Request) *Params {
 	params.NotAssociatedToTeam = query.Get("not_associated_to_team")
 	params.NotAssociatedToChannel = query.Get("not_associated_to_channel")
 	params.FilterAllowReference, _ = strconv.ParseBool(query.Get("filter_allow_reference"))
+	params.FilterArchived, _ = strconv.ParseBool(query.Get("filter_archived"))
 	params.FilterParentTeamPermitted, _ = strconv.ParseBool(query.Get("filter_parent_team_permitted"))
 	params.IncludeChannelMemberCount = query.Get("include_channel_member_count")
 
@@ -216,12 +264,12 @@ func ParamsFromRequest(r *http.Request) *Params {
 	}
 
 	params.IncludeMemberCount, _ = strconv.ParseBool(query.Get("include_member_count"))
+	params.IncludeMemberIDs, _ = strconv.ParseBool(query.Get("include_member_ids"))
 	params.NotAssociatedToGroup = query.Get("not_associated_to_group")
 	params.ExcludeDefaultChannels, _ = strconv.ParseBool(query.Get("exclude_default_channels"))
 	params.GroupIDs = query.Get("group_ids")
 	params.IncludeTotalCount, _ = strconv.ParseBool(query.Get("include_total_count"))
 	params.IncludeDeleted, _ = strconv.ParseBool(query.Get("include_deleted"))
-	params.WarnMetricId = props["warn_metric_id"]
 	params.ExportName = props["export_name"]
 	params.ExcludePolicyConstrained, _ = strconv.ParseBool(query.Get("exclude_policy_constrained"))
 
@@ -236,22 +284,11 @@ func ParamsFromRequest(r *http.Request) *Params {
 
 	params.FilterHasMember = query.Get("filter_has_member")
 
-	return params
-}
+	if val, err := strconv.ParseInt(query.Get("bookmarks_since"), 10, 64); err != nil || val < 0 {
+		params.BookmarksSince = 0
+	} else {
+		params.BookmarksSince = val
+	}
 
-// getPerPageFromQuery returns the PerPage value from the given query.
-// This function should be removed and the support for `pageSize`
-// should be dropped after v1.46 of the mobile app is no longer supported
-// https://mattermost.atlassian.net/browse/MM-38131
-func getPerPageFromQuery(query url.Values) int {
-	val, err := strconv.Atoi(query.Get("per_page"))
-	if err != nil {
-		val, err = strconv.Atoi(query.Get("pageSize"))
-	}
-	if err != nil || val < 0 {
-		return PerPageDefault
-	} else if val > PerPageMaximum {
-		return PerPageMaximum
-	}
-	return val
+	return params
 }

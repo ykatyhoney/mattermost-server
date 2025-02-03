@@ -115,7 +115,7 @@ export default class GetLinkModal extends React.PureComponent<Props, State> {
                 show={this.props.show}
                 onHide={this.onHide}
                 onExited={this.props.onExited}
-                role='dialog'
+                role='none'
                 aria-labelledby='getLinkModalLabel'
             >
                 <Modal.Header
@@ -132,7 +132,7 @@ export default class GetLinkModal extends React.PureComponent<Props, State> {
                     <button
                         id='linkModalCloseButton'
                         type='button'
-                        className='btn btn-link'
+                        className='btn btn-tertiary'
                         onClick={this.onHide}
                     >
                         <FormattedMessage

@@ -2,10 +2,9 @@
 // See LICENSE.txt for license information.
 
 import {useCallback} from 'react';
-
 import {useDispatch, useSelector} from 'react-redux';
 
-import {PreferenceType} from '@mattermost/types/preferences';
+import type {PreferenceType} from '@mattermost/types/preferences';
 
 import {savePreferences} from 'mattermost-redux/actions/preferences';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
@@ -19,7 +18,7 @@ export default function useSavePreferences(): (preferences: MinimalPreferenceTyp
         const preferencesList = ((preferences as MinimalPreferenceType[]).length ? preferences : [preferences]) as MinimalPreferenceType[];
         const preferencesListWithUserId: PreferenceType[] = preferencesList.map((x) => ({...x, user_id: userId}));
         dispatch(savePreferences(userId, preferencesListWithUserId));
-    }, [userId]);
+    }, [dispatch, userId]);
 }
 
 type MinimalBoolPreferenceType = Omit<MinimalPreferenceType, 'value'> & {value?: boolean}

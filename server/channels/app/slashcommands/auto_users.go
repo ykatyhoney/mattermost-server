@@ -4,14 +4,15 @@
 package slashcommands
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app"
-	"github.com/mattermost/mattermost-server/v6/server/channels/app/request"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
-	"github.com/mattermost/mattermost-server/v6/server/channels/utils"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/request"
+	"github.com/mattermost/mattermost/server/v8/channels/app"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
+	"github.com/mattermost/mattermost/server/v8/channels/utils"
 )
 
 type AutoUserCreator struct {
@@ -41,19 +42,19 @@ func NewAutoUserCreator(a *app.App, client *model.Client4, team *model.Team) *Au
 }
 
 // Basic test team and user so you always know one
-func CreateBasicUser(a *app.App, client *model.Client4) error {
-	found, _, _ := client.TeamExists(BTestTeamName, "")
+func CreateBasicUser(rctx request.CTX, a *app.App, client *model.Client4) error {
+	found, _, _ := client.TeamExists(context.Background(), BTestTeamName, "")
 	if found {
 		return nil
 	}
 
 	newteam := &model.Team{DisplayName: BTestTeamDisplayName, Name: BTestTeamName, Email: BTestTeamEmail, Type: BTestTeamType}
-	basicteam, _, err := client.CreateTeam(newteam)
+	basicteam, _, err := client.CreateTeam(context.Background(), newteam)
 	if err != nil {
 		return err
 	}
 	newuser := &model.User{Email: BTestUserEmail, Nickname: BTestUserName, Password: BTestUserPassword}
-	ruser, _, err := client.CreateUser(newuser)
+	ruser, _, err := client.CreateUser(context.Background(), newuser)
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func CreateBasicUser(a *app.App, client *model.Client4) error {
 	if err != nil {
 		return model.NewAppError("CreateBasicUser", "app.user.verify_email.app_error", nil, "", http.StatusInternalServerError).Wrap(err)
 	}
-	if _, nErr := a.Srv().Store().Team().SaveMember(&model.TeamMember{TeamId: basicteam.Id, UserId: ruser.Id, CreateAt: model.GetMillis()}, *a.Config().TeamSettings.MaxUsersPerTeam); nErr != nil {
+	if _, nErr := a.Srv().Store().Team().SaveMember(rctx, &model.TeamMember{TeamId: basicteam.Id, UserId: ruser.Id, CreateAt: model.GetMillis()}, *a.Config().TeamSettings.MaxUsersPerTeam); nErr != nil {
 		var appErr *model.AppError
 		var conflictErr *store.ErrConflict
 		var limitExceededErr *store.ErrLimitExceeded
@@ -85,10 +86,10 @@ func (cfg *AutoUserCreator) createRandomUser(c request.CTX) (*model.User, error)
 	var userName string
 	if cfg.Fuzzy {
 		userEmail = "success+" + model.NewId() + "@simulator.amazonses.com"
-		userName = utils.FuzzName()
+		userName = "a" + utils.FuzzName()
 	} else {
 		userEmail = "success+" + model.NewId() + "@simulator.amazonses.com"
-		userName = utils.RandomName(cfg.NameLength, cfg.NameCharset)
+		userName = "a" + utils.RandomName(cfg.NameLength, cfg.NameCharset)
 	}
 
 	user := &model.User{
@@ -121,12 +122,12 @@ func (cfg *AutoUserCreator) createRandomUser(c request.CTX) (*model.User, error)
 	}
 
 	if cfg.JoinTime != 0 {
-		teamMember, appErr := cfg.app.GetTeamMember(cfg.team.Id, ruser.Id)
+		teamMember, appErr := cfg.app.GetTeamMember(c, cfg.team.Id, ruser.Id)
 		if appErr != nil {
 			return nil, appErr
 		}
 		teamMember.CreateAt = cfg.JoinTime
-		_, err := cfg.app.Srv().Store().Team().UpdateMember(teamMember)
+		_, err := cfg.app.Srv().Store().Team().UpdateMember(c, teamMember)
 		if err != nil {
 			return nil, err
 		}

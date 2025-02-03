@@ -1,13 +1,12 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {createSelector} from 'reselect';
+import type {FileInfo, FileSearchResultItem} from '@mattermost/types/files';
+import type {Post} from '@mattermost/types/posts';
+import type {GlobalState} from '@mattermost/types/store';
 
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {getCurrentUserLocale} from 'mattermost-redux/selectors/entities/i18n';
-
-import {FileInfo, FileSearchResultItem} from '@mattermost/types/files';
-import {GlobalState} from '@mattermost/types/store';
-
 import {sortFileInfos} from 'mattermost-redux/utils/file_utils';
 
 function getAllFiles(state: GlobalState) {
@@ -22,7 +21,7 @@ function getAllFilesFromSearch(state: GlobalState) {
     return state.entities.files.filesFromSearch;
 }
 
-function getFilesIdsForPost(state: GlobalState, postId: string) {
+export function getFilesIdsForPost(state: GlobalState, postId: string) {
     if (postId) {
         return state.entities.files.fileIdsByPostId[postId] || [];
     }
@@ -39,11 +38,23 @@ export function makeGetFilesForPost(): (state: GlobalState, postId: string) => F
         'makeGetFilesForPost',
         getAllFiles,
         getFilesIdsForPost,
-        getCurrentUserLocale,
+        (state) => getCurrentUserLocale(state),
         (allFiles, fileIdsForPost, locale) => {
             const fileInfos = fileIdsForPost.map((id) => allFiles[id]).filter((id) => Boolean(id));
 
             return sortFileInfos(fileInfos, locale);
+        },
+    );
+}
+
+export function makeGetFilesForEditHistory(): (state: GlobalState, editHistoryPost: Post) => FileInfo[] {
+    return createSelector(
+        'makeGetFilesForEditHistory',
+        (state) => getCurrentUserLocale(state),
+        (state: GlobalState, editHistoryPost: Post) => editHistoryPost,
+        (userLocal, editHistoryPost) => {
+            const fileInfos = editHistoryPost?.metadata?.files ? [...editHistoryPost.metadata.files] : [];
+            return sortFileInfos(fileInfos, userLocal);
         },
     );
 }

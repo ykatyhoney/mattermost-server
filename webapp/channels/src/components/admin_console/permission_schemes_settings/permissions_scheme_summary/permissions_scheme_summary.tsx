@@ -2,19 +2,18 @@
 // See LICENSE.txt for license information.
 
 import React from 'react';
-import {Link, RouteComponentProps} from 'react-router-dom';
-import {FormattedMessage} from 'react-intl';
+import {defineMessage, FormattedMessage} from 'react-intl';
+import {Link} from 'react-router-dom';
+import type {RouteComponentProps} from 'react-router-dom';
+
+import type {Scheme} from '@mattermost/types/schemes';
+import type {Team} from '@mattermost/types/teams';
+
+import type {ActionResult} from 'mattermost-redux/types/actions';
 
 import ConfirmModal from 'components/confirm_modal';
-import OverlayTrigger from 'components/overlay_trigger';
-import Tooltip from 'components/tooltip';
 import LoadingWrapper from 'components/widgets/loading/loading_wrapper';
-
-import * as Utils from 'utils/utils';
-import Constants from 'utils/constants';
-import {Scheme} from '@mattermost/types/schemes';
-import {ActionResult} from 'mattermost-redux/types/actions';
-import {Team} from '@mattermost/types/teams';
+import WithTooltip from 'components/with_tooltip';
 
 const MAX_TEAMS_PER_SCHEME_SUMMARY = 8;
 
@@ -77,7 +76,7 @@ export default class PermissionsSchemeSummary extends React.PureComponent<Props 
         const confirmButton = (
             <LoadingWrapper
                 loading={this.state.deleting}
-                text={Utils.localizeMessage('admin.permissions.permissionsSchemeSummary.deleting', 'Deleting...')}
+                text={defineMessage({id: 'admin.permissions.permissionsSchemeSummary.deleting', defaultMessage: 'Deleting...'})}
             >
                 <FormattedMessage
                     id='admin.permissions.permissionsSchemeSummary.deleteConfirmButton'
@@ -145,17 +144,8 @@ export default class PermissionsSchemeSummary extends React.PureComponent<Props 
         let extraTeams = null;
         if (teams.length > MAX_TEAMS_PER_SCHEME_SUMMARY) {
             extraTeams = (
-                <OverlayTrigger
-                    delayShow={Constants.OVERLAY_TIME_DELAY}
-                    placement='bottom'
-                    overlay={
-                        <Tooltip
-                            className='team-scheme-extra-teams-overlay'
-                            id={scheme.id + '-extra-teams-overlay'}
-                        >
-                            {teams.slice(MAX_TEAMS_PER_SCHEME_SUMMARY)}
-                        </Tooltip>
-                    }
+                <WithTooltip
+                    title={this.props?.teams?.slice(MAX_TEAMS_PER_SCHEME_SUMMARY).map((team) => team.display_name).join(', ') ?? ''}
                 >
                     <span
                         className='team'
@@ -167,7 +157,7 @@ export default class PermissionsSchemeSummary extends React.PureComponent<Props 
                             values={{number: teams.length - MAX_TEAMS_PER_SCHEME_SUMMARY}}
                         />
                     </span>
-                </OverlayTrigger>
+                </WithTooltip>
             );
             teams = teams.slice(0, MAX_TEAMS_PER_SCHEME_SUMMARY);
         }

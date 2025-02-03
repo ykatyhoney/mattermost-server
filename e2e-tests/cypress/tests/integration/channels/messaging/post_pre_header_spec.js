@@ -40,6 +40,19 @@ describe('Post PreHeader', () => {
             // * Assert the preHeader is displayed and works as expected
             verifySavedPost(postId, message);
 
+            // # Click the saved link
+            cy.get('@savedLink').click();
+
+            // * Check that the saved post shows the channel name
+            cy.findByTestId('search-item-container').within(() => {
+                cy.get('span.search-channel__name').
+                    should('be.visible').
+                    and('have.text', 'Off-Topic');
+            });
+
+            // # Close the RHS
+            cy.get('#searchResultsCloseButton').should('be.visible').click();
+
             // # Click again the center save icon of a post
             cy.clickPostSaveIcon(postId);
 
@@ -91,7 +104,7 @@ describe('Post PreHeader', () => {
             cy.get('#searchContainer').should('be.visible').within(() => {
                 cy.get('.sidebar--right__title').
                     should('be.visible').
-                    and('contain', 'Pinned Posts').
+                    and('contain', 'Pinned messages').
                     and('contain', 'Off-Topic');
 
                 // * Check that the post pre-header is not shown for the pinned message in RHS
@@ -173,7 +186,8 @@ describe('Post PreHeader', () => {
             });
 
             // # Search for the channel.
-            cy.get('#searchBox').type('test both pinned and saved {enter}');
+            cy.uiGetSearchContainer().click();
+            cy.uiGetSearchBox().first().type('test both pinned and saved {enter}');
 
             // * Check that the post pre-header has both pinned and saved links in RHS search results
             cy.get('#searchContainer').should('be.visible').within(() => {

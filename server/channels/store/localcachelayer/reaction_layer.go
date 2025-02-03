@@ -6,8 +6,8 @@ package localcachelayer
 import (
 	"bytes"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/channels/store"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/v8/channels/store"
 )
 
 type LocalCacheReactionStore struct {
@@ -24,12 +24,12 @@ func (s *LocalCacheReactionStore) handleClusterInvalidateReaction(msg *model.Clu
 }
 
 func (s LocalCacheReactionStore) Save(reaction *model.Reaction) (*model.Reaction, error) {
-	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.reactionCache, reaction.PostId)
+	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.reactionCache, reaction.PostId, nil)
 	return s.ReactionStore.Save(reaction)
 }
 
 func (s LocalCacheReactionStore) Delete(reaction *model.Reaction) (*model.Reaction, error) {
-	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.reactionCache, reaction.PostId)
+	defer s.rootStore.doInvalidateCacheCluster(s.rootStore.reactionCache, reaction.PostId, nil)
 	return s.ReactionStore.Delete(reaction)
 }
 

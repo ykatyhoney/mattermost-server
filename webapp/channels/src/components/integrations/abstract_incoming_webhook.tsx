@@ -1,17 +1,19 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ChangeEventHandler, FormEvent, MouseEvent, PureComponent} from 'react';
-import {FormattedMessage, MessageDescriptor} from 'react-intl';
+import React, {PureComponent} from 'react';
+import type {ChangeEventHandler, FormEvent, MouseEvent} from 'react';
+import {FormattedMessage} from 'react-intl';
+import type {MessageDescriptor} from 'react-intl';
 import {Link} from 'react-router-dom';
+
+import type {IncomingWebhook} from '@mattermost/types/integrations';
+import type {Team} from '@mattermost/types/teams';
 
 import BackstageHeader from 'components/backstage/components/backstage_header';
 import ChannelSelect from 'components/channel_select';
 import FormError from 'components/form_error';
 import SpinnerButton from 'components/spinner_button';
-import {Team} from '@mattermost/types/teams';
-import {localizeMessage} from 'utils/utils';
-import {IncomingWebhook} from '@mattermost/types/integrations';
 
 interface State {
     displayName: string;
@@ -55,7 +57,7 @@ interface Props {
     /**
     * The hook used to set the initial state
     */
-    initialHook?: IncomingWebhook | Record<string, never>;
+    initialHook?: IncomingWebhook;
 
     /**
     * Whether to allow configuration of the default post username.
@@ -77,10 +79,10 @@ export default class AbstractIncomingWebhook extends PureComponent<Props, State>
     constructor(props: Props | Readonly<Props>) {
         super(props);
 
-        this.state = this.getStateFromHook(this.props.initialHook || {});
+        this.state = this.getStateFromHook(this.props.initialHook);
     }
 
-    getStateFromHook = (hook: IncomingWebhook | Record<string, never>) => {
+    getStateFromHook = (hook?: IncomingWebhook) => {
         return {
             displayName: hook?.display_name || '',
             description: hook?.description || '',
@@ -184,7 +186,7 @@ export default class AbstractIncomingWebhook extends PureComponent<Props, State>
                 <BackstageHeader>
                     <Link to={`/${this.props.team.name}/integrations/incoming_webhooks`}>
                         <FormattedMessage
-                            id='installed_incoming_webhooks.header'
+                            id='incoming_webhooks.header'
                             defaultMessage='Incoming Webhooks'
                         />
                     </Link>
@@ -367,7 +369,7 @@ export default class AbstractIncomingWebhook extends PureComponent<Props, State>
                                 errors={[this.props.serverError, this.state.clientError]}
                             />
                             <Link
-                                className='btn btn-link btn-sm'
+                                className='btn btn-tertiary'
                                 to={`/${this.props.team.name}/integrations/incoming_webhooks`}
                             >
                                 <FormattedMessage
@@ -379,7 +381,7 @@ export default class AbstractIncomingWebhook extends PureComponent<Props, State>
                                 className='btn btn-primary'
                                 type='submit'
                                 spinning={this.state.saving}
-                                spinningText={localizeMessage(this.props.loading.id as string, this.props.loading.defaultMessage as string)}
+                                spinningText={this.props.loading}
                                 onClick={(e) => this.handleSubmit(e)}
                                 id='saveWebhook'
                             >

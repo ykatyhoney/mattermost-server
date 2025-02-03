@@ -1,15 +1,15 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
-import {IntlShape} from 'react-intl';
+import type React from 'react';
+import type {IntlShape} from 'react-intl';
 
-import {Post} from '@mattermost/types/posts';
-import {FileInfo} from '@mattermost/types/files';
+import type {FileInfo} from '@mattermost/types/files';
+import type {Post} from '@mattermost/types/posts';
 
-import {SearchFilterType} from '../search/types';
+import type {SearchFilterType} from 'components/search/types';
 
-import {SearchType} from 'types/store/rhs';
+import type {SearchType} from 'types/store/rhs';
 
 export type OwnProps = {
     [key: string]: any;
@@ -29,24 +29,26 @@ export type OwnProps = {
     setSearchType: (searchType: SearchType) => void;
     searchFilterType: SearchFilterType;
     setSearchFilterType: (filterType: SearchFilterType) => void;
-}
+    updateSearchTeam: (teamId: string) => void;
+    crossTeamSearchEnabled: boolean;
+};
 
 export type StateProps = {
     results: Post[];
     fileResults: FileInfo[];
     matches: Record<string, string[]>;
     searchTerms: string;
+    searchSelectedType: string;
     isSearchingTerm: boolean;
     isSearchingFlaggedPost: boolean;
     isSearchingPinnedPost: boolean;
     isSearchGettingMore: boolean;
     isSearchAtEnd: boolean;
     isSearchFilesAtEnd: boolean;
-}
+};
 
 export type IntlProps = {
     intl: IntlShape;
-}
+};
 
 export type Props = OwnProps & StateProps & IntlProps;
-

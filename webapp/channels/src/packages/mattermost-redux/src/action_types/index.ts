@@ -1,34 +1,36 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import ChannelTypes from './channels';
-import DraftTypes from './drafts';
-import ErrorTypes from './errors';
-import GeneralTypes from './general';
-import UserTypes from './users';
-import TeamTypes from './teams';
-import PostTypes from './posts';
-import FileTypes from './files';
-import PreferenceTypes from './preferences';
-import IntegrationTypes from './integrations';
-import EmojiTypes from './emojis';
-import GifTypes from './gifs';
+import type {AnyAction} from 'redux';
+
 import AdminTypes from './admin';
+import AppsTypes from './apps';
+import BotTypes from './bots';
+import ChannelBookmarkTypes from './channel_bookmarks';
+import ChannelCategoryTypes from './channel_categories';
+import ChannelTypes from './channels';
+import CloudTypes from './cloud';
+import DraftTypes from './drafts';
+import EmojiTypes from './emojis';
+import ErrorTypes from './errors';
+import FileTypes from './files';
+import GeneralTypes from './general';
+import GroupTypes from './groups';
+import HostedCustomerTypes from './hosted_customer';
+import IntegrationTypes from './integrations';
 import JobTypes from './jobs';
-import SearchTypes from './search';
+import LimitsTypes from './limits';
+import PlaybookType from './playbooks';
+import PluginTypes from './plugins';
+import PostTypes from './posts';
+import PreferenceTypes from './preferences';
 import RoleTypes from './roles';
 import SchemeTypes from './schemes';
-import GroupTypes from './groups';
-import BotTypes from './bots';
-import PluginTypes from './plugins';
-import ChannelCategoryTypes from './channel_categories';
-import CloudTypes from './cloud';
-import AppsTypes from './apps';
+import ScheduledPostTypes from './scheudled_posts';
+import SearchTypes from './search';
+import TeamTypes from './teams';
 import ThreadTypes from './threads';
-import InsightTypes from './insights';
-import HostedCustomerTypes from './hosted_customer';
-import WorkTemplatesType from './work_templates';
-import PlaybookType from './playbooks';
+import UserTypes from './users';
 
 export {
     ErrorTypes,
@@ -41,9 +43,9 @@ export {
     PreferenceTypes,
     IntegrationTypes,
     EmojiTypes,
-    GifTypes,
     AdminTypes,
     JobTypes,
+    LimitsTypes,
     SearchTypes,
     RoleTypes,
     SchemeTypes,
@@ -54,9 +56,14 @@ export {
     CloudTypes,
     AppsTypes,
     ThreadTypes,
-    InsightTypes,
     HostedCustomerTypes,
-    WorkTemplatesType,
     DraftTypes,
     PlaybookType,
+    ChannelBookmarkTypes,
+    ScheduledPostTypes,
 };
+
+/**
+ * An MMReduxAction is any non-Thunk Redux action accepted by mattermost-redux.
+ */
+export type MMReduxAction = AnyAction;

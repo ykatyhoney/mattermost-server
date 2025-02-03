@@ -17,15 +17,15 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
 )
 
 const (
-	defaultMysqlDSN        = "mmuser:mostest@tcp(localhost:3306)/mattermost_test?charset=utf8mb4,utf8&readTimeout=30s&writeTimeout=30s&multiStatements=true"
+	defaultMysqlDSN        = "mmuser:mostest@tcp(localhost:3306)/mattermost_test?charset=utf8mb4&readTimeout=30s&writeTimeout=30s&multiStatements=true&maxAllowedPacket=4194304"
 	defaultPostgresqlDSN   = "postgres://mmuser:mostest@localhost:5432/mattermost_test?sslmode=disable&connect_timeout=10"
 	defaultMysqlRootPWD    = "mostest"
-	defaultMysqlReplicaDSN = "root:mostest@tcp(localhost:3307)/mattermost_test?charset=utf8mb4,utf8\u0026readTimeout=30s"
+	defaultMysqlReplicaDSN = "root:mostest@tcp(localhost:3307)/mattermost_test?charset=utf8mb4\u0026readTimeout=30s"
 )
 
 func getEnv(name, defaultValue string) string {
@@ -172,8 +172,8 @@ func databaseSettings(driver, dataSource string) *model.SqlSettings {
 		ConnMaxLifetimeMilliseconds:       new(int),
 		ConnMaxIdleTimeMilliseconds:       new(int),
 		MaxOpenConns:                      new(int),
-		Trace:                             model.NewBool(false),
-		AtRestEncryptKey:                  model.NewString(model.NewRandomString(32)),
+		Trace:                             model.NewPointer(false),
+		AtRestEncryptKey:                  model.NewPointer(model.NewRandomString(32)),
 		QueryTimeout:                      new(int),
 		MigrationsStatementTimeoutSeconds: new(int),
 	}
@@ -182,7 +182,7 @@ func databaseSettings(driver, dataSource string) *model.SqlSettings {
 	*settings.ConnMaxIdleTimeMilliseconds = 300000
 	*settings.MaxOpenConns = 100
 	*settings.QueryTimeout = 60
-	*settings.MigrationsStatementTimeoutSeconds = 10
+	*settings.MigrationsStatementTimeoutSeconds = 60
 
 	return settings
 }
@@ -261,6 +261,7 @@ func MakeSqlSettings(driver string, withReplica bool) *model.SqlSettings {
 	}
 
 	log("Created temporary " + driver + " database " + dbName)
+	settings.ReplicaMonitorIntervalSeconds = model.NewPointer(5)
 
 	return settings
 }

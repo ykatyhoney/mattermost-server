@@ -6,8 +6,8 @@ package sqlstore_test
 import (
 	"testing"
 
-	"github.com/mattermost/mattermost-server/v6/server/channels/store/sqlstore"
-	"github.com/mattermost/mattermost-server/v6/server/channels/testlib"
+	"github.com/mattermost/mattermost/server/v8/channels/store/sqlstore"
+	"github.com/mattermost/mattermost/server/v8/channels/testlib"
 )
 
 var mainHelper *testlib.MainHelper
@@ -16,7 +16,7 @@ func TestMain(m *testing.M) {
 	mainHelper = testlib.NewMainHelperWithOptions(nil)
 	defer mainHelper.Close()
 
-	sqlstore.InitTest()
+	sqlstore.InitTest(mainHelper.Logger)
 
 	mainHelper.Main(m)
 	sqlstore.TearDownTest()

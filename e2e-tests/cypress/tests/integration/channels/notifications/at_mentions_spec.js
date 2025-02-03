@@ -41,6 +41,10 @@ describe('Notifications', () => {
             // # Login as receiver and visit off-topic channel
             cy.apiLogin(receiver);
             cy.visit(`/${testTeam.name}/channels/${testChannel.name}`);
+
+            // # Wait for the page to fully load before continuing
+            cy.get('#channelHeaderDropdownButton').should('be.visible').and('have.text', testChannel.display_name);
+
             cy.get(`#sidebarItem_${otherChannel.name}`).click();
             cy.get('#sidebarItem_off-topic').click();
         });
@@ -243,14 +247,16 @@ function setNotificationSettings(desiredSettings = {first: true, username: true,
     // Navigate to settings modal
     cy.uiOpenSettingsModal();
 
-    // Notifications header should be visible
-    cy.get('#notificationSettingsTitle').
-        scrollIntoView().
+    // # Click on notifications tab
+    cy.findByRoleExtended('tab', {name: 'Notifications'}).
         should('be.visible').
-        and('contain', 'Notifications');
+        click();
+
+    // Notifications header should be visible
+    cy.findAllByText('Notifications').should('be.visible');
 
     // Open up 'Words that trigger mentions' sub-section
-    cy.get('#keysTitle').
+    cy.findByText('Keywords that trigger notifications').
         scrollIntoView().
         click();
 
@@ -270,8 +276,8 @@ function setNotificationSettings(desiredSettings = {first: true, username: true,
     // Set Custom field
     if (desiredSettings.custom && desiredSettings.customText) {
         cy.get('#notificationTriggerCustomText').
-            clear().
-            type(desiredSettings.customText);
+            type(desiredSettings.customText, {force: true}).
+            tab();
     }
 
     // Click “Save” and close modal
@@ -282,4 +288,5 @@ function setNotificationSettings(desiredSettings = {first: true, username: true,
 
     // # Navigate to a channel we are NOT going to post to
     cy.get(`#sidebarItem_${channelName}`).scrollIntoView().click({force: true});
+    cy.get('#loadingSpinner').should('not.exist');
 }

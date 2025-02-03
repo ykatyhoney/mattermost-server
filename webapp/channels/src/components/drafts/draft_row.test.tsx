@@ -1,26 +1,27 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import type {ComponentProps} from 'react';
+import React from 'react';
 import {Provider} from 'react-redux';
 
-import {UserProfile, UserStatus} from '@mattermost/types/users';
+import type {UserProfile, UserStatus} from '@mattermost/types/users';
 
 import mockStore from 'tests/test_store';
 
-import {Draft} from 'selectors/drafts';
+import type {PostDraft} from 'types/store/draft';
 
 import DraftRow from './draft_row';
 
 describe('components/drafts/drafts_row', () => {
-    const baseProps = {
-        draft: {
-            type: 'channel',
-        } as Draft,
+    const baseProps: ComponentProps<typeof DraftRow> = {
+        item: {} as PostDraft,
         user: {} as UserProfile,
         status: {} as UserStatus['status'],
         displayName: 'test',
+        isRemote: false,
+
     };
 
     it('should match snapshot for channel draft', () => {
@@ -41,10 +42,7 @@ describe('components/drafts/drafts_row', () => {
 
         const props = {
             ...baseProps,
-            draft: {
-                ...baseProps.draft,
-                type: 'thread',
-            } as Draft,
+            draft: {rootId: 'some_id'} as PostDraft,
         };
 
         const wrapper = shallow(

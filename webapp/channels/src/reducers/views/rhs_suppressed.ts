@@ -2,12 +2,13 @@
 // See LICENSE.txt for license information.
 
 import {UserTypes} from 'mattermost-redux/action_types';
-import {GenericAction} from 'mattermost-redux/types/actions';
 
-import {ViewsState} from 'types/store/views';
 import {ActionTypes} from 'utils/constants';
 
-export default function rhsSuppressed(state: ViewsState['rhsSuppressed'] = false, action: GenericAction): boolean {
+import type {MMAction} from 'types/store';
+import type {ViewsState} from 'types/store/views';
+
+export default function rhsSuppressed(state: ViewsState['rhsSuppressed'] = false, action: MMAction): boolean {
     switch (action.type) {
     case ActionTypes.SUPPRESS_RHS:
         return true;

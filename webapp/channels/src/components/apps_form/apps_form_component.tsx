@@ -3,26 +3,26 @@
 
 import React from 'react';
 import {Modal, Fade} from 'react-bootstrap';
-import {FormattedMessage, injectIntl, WrappedComponentProps} from 'react-intl';
+import {defineMessage, FormattedMessage, injectIntl} from 'react-intl';
+import type {WrappedComponentProps} from 'react-intl';
 
+import type {AppCallResponse, AppField, AppForm, AppFormValues, AppSelectOption, FormResponseData, AppLookupResponse, AppFormValue} from '@mattermost/types/apps';
+import type {DialogElement} from '@mattermost/types/integrations';
+
+import {AppCallResponseTypes, AppFieldTypes} from 'mattermost-redux/constants/apps';
 import {
     checkDialogElementForError, checkIfErrorsMatchElements,
 } from 'mattermost-redux/utils/integration_utils';
-import {AppCallResponse, AppField, AppForm, AppFormValues, AppSelectOption, FormResponseData, AppLookupResponse, AppFormValue} from '@mattermost/types/apps';
-import {DialogElement} from '@mattermost/types/integrations';
-import {AppCallResponseTypes, AppFieldTypes} from 'mattermost-redux/constants/apps';
 
-import {DoAppCallResult} from 'types/apps';
-
+import Markdown from 'components/markdown';
 import SpinnerButton from 'components/spinner_button';
-import LoadingSpinner from 'components/widgets/loading/loading_spinner';
-import SuggestionList from 'components/suggestion/suggestion_list';
 import ModalSuggestionList from 'components/suggestion/modal_suggestion_list';
-
-import {localizeMessage} from 'utils/utils';
+import SuggestionList from 'components/suggestion/suggestion_list';
+import LoadingSpinner from 'components/widgets/loading/loading_spinner';
 
 import {filterEmptyOptions} from 'utils/apps';
-import Markdown from 'components/markdown';
+
+import type {DoAppCallResult} from 'types/apps';
 
 import AppsFormField from './apps_form_field';
 import AppsFormHeader from './apps_form_header';
@@ -110,7 +110,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
 
         if (fieldErrors && Object.keys(fieldErrors).length >= 0) {
             hasErrors = true;
-            if (checkIfErrorsMatchElements(fieldErrors as any, elements)) {
+            if (checkIfErrorsMatchElements(fieldErrors, elements)) {
                 state.fieldErrors = {};
                 for (const [key, value] of Object.entries(fieldErrors)) {
                     state.fieldErrors[key] = (<Markdown message={value}/>);
@@ -234,7 +234,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
             const errorResponse = res.error;
             const errMsg = errorResponse.text || intl.formatMessage({
                 id: 'apps.error.unknown',
-                defaultMessage: 'Unknown error.',
+                defaultMessage: 'Unknown error occurred.',
             });
             this.setState({
                 fieldErrors: {
@@ -256,7 +256,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
         case AppCallResponseTypes.NAVIGATE: {
             const errMsg = intl.formatMessage({
                 id: 'apps.error.responses.unexpected_type',
-                defaultMessage: 'App response type was not expected. Response type: {type}.',
+                defaultMessage: 'App response type was not expected. Response type: {type}',
             }, {
                 type: callResp.type,
             },
@@ -338,7 +338,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                 case AppCallResponseTypes.NAVIGATE:
                     this.updateErrors([], undefined, this.props.intl.formatMessage({
                         id: 'apps.error.responses.unexpected_type',
-                        defaultMessage: 'App response type was not expected. Response type: {type}.',
+                        defaultMessage: 'App response type was not expected. Response type: {type}',
                     }, {
                         type: callResponse.type,
                     }));
@@ -370,7 +370,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                 onHide={this.onHide}
                 onExited={this.props.onExited}
                 backdrop='static'
-                role='dialog'
+                role='none'
                 aria-labelledby='appsModalLabel'
             >
                 <form
@@ -451,10 +451,10 @@ export class AppsForm extends React.PureComponent<Props, State> {
         }
 
         return (
-            <React.Fragment>
+            <>
                 {iconComponent}
                 {title}
-            </React.Fragment>
+            </>
         );
     }
 
@@ -487,7 +487,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
         const {fields, header} = this.props.form;
 
         return (fields || header) && (
-            <React.Fragment>
+            <>
                 {header && (
                     <AppsFormHeader
                         id='appsModalHeader'
@@ -495,7 +495,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                     />
                 )}
                 {this.renderElements()}
-            </React.Fragment>
+            </>
         );
     }
 
@@ -517,10 +517,10 @@ export class AppsForm extends React.PureComponent<Props, State> {
                 autoFocus={!fields || fields.length === 0}
                 className='btn btn-primary save-button'
                 spinning={Boolean(this.state.submitting)}
-                spinningText={localizeMessage(
-                    'interactive_dialog.submitting',
-                    'Submitting...',
-                )}
+                spinningText={defineMessage({
+                    id: 'interactive_dialog.submitting',
+                    defaultMessage: 'Submitting...',
+                })}
             >
                 {submitText}
             </SpinnerButton>
@@ -549,7 +549,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
         }
 
         return (
-            <React.Fragment>
+            <>
                 <div>
                     {this.state.formError && (
                         <div>
@@ -561,7 +561,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                     <button
                         id='appsModalCancel'
                         type='button'
-                        className='btn btn-link cancel-button'
+                        className='btn btn-tertiary cancel-button'
                         onClick={this.onHide}
                     >
                         <FormattedMessage
@@ -571,7 +571,7 @@ export class AppsForm extends React.PureComponent<Props, State> {
                     </button>
                     {submitButtons}
                 </div>
-            </React.Fragment>
+            </>
         );
     }
 

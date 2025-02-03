@@ -9,16 +9,16 @@ import {Preferences} from 'utils/constants';
 
 import PostList from './post_list';
 
-interface Props {
-    lastViewedAt: number;
+type Props = {
+    lastViewedAt?: number;
     channelLoading: boolean;
     channelId: string;
     focusedPostId?: string;
     unreadScrollPosition: string;
-}
+};
 
 interface State {
-    unreadChunkTimeStamp: number;
+    unreadChunkTimeStamp?: number;
     loaderForChangeOfPostsChunk: boolean;
     channelLoading: boolean;
     shouldStartFromBottomWhenUnread: boolean;

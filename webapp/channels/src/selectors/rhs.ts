@@ -1,22 +1,31 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {createSelector} from 'reselect';
+import type {Channel} from '@mattermost/types/channels';
+import type {Post, PostType} from '@mattermost/types/posts';
 
+import {createSelector} from 'mattermost-redux/selectors/create_selector';
 import {makeGetChannel} from 'mattermost-redux/selectors/entities/channels';
-import {Post, PostType} from '@mattermost/types/posts';
+import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
 import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {Channel} from '@mattermost/types/channels';
 
 import {makeGetGlobalItem, makeGetGlobalItemWithDefault} from 'selectors/storage';
+
+import type {SidebarSize} from 'components/resizable_sidebar/constants';
+
 import {PostTypes, StoragePrefixes} from 'utils/constants';
 import {localizeMessage} from 'utils/utils';
-import {GlobalState} from 'types/store';
-import {RhsState, FakePost, SearchType} from 'types/store/rhs';
-import {PostDraft} from 'types/store/draft';
+
+import type {GlobalState} from 'types/store';
+import type {PostDraft} from 'types/store/draft';
+import type {RhsState, FakePost, SearchType} from 'types/store/rhs';
 
 export function getSelectedPostId(state: GlobalState): Post['id'] {
     return state.views.rhs.selectedPostId;
+}
+
+export function getRhsSize(state: GlobalState): SidebarSize {
+    return state.views.rhs.size;
 }
 
 export function getSelectedPostFocussedAt(state: GlobalState): number {
@@ -49,7 +58,7 @@ export const getSelectedChannel = (() => {
     return (state: GlobalState) => {
         const channelId = getSelectedChannelId(state);
 
-        return getChannel(state, {id: channelId});
+        return getChannel(state, channelId);
     };
 })();
 
@@ -73,7 +82,12 @@ export const getSelectedPost = createSelector(
     getRealSelectedPost,
     getSelectedChannelId,
     getCurrentUserId,
-    (selectedPostId: Post['id'], selectedPost: Post, selectedPostChannelId: Channel['id'], currentUserId): Post|FakePost => {
+    (
+        selectedPostId: Post['id'],
+        selectedPost: Post,
+        selectedPostChannelId: Channel['id'],
+        currentUserId,
+    ): Post | FakePost => {
         if (selectedPost) {
             return selectedPost;
         }
@@ -83,10 +97,24 @@ export const getSelectedPost = createSelector(
             id: selectedPostId,
             exists: false,
             type: PostTypes.FAKE_PARENT_DELETED as PostType,
-            message: localizeMessage('rhs_thread.rootPostDeletedMessage.body', 'Part of this thread has been deleted due to a data retention policy. You can no longer reply to this thread.'),
+            message: localizeMessage({
+                id: 'rhs_thread.rootPostDeletedMessage.body',
+                defaultMessage:
+                    'Part of this thread has been deleted due to a data retention policy. You can no longer reply to this thread.',
+            }),
             channel_id: selectedPostChannelId,
             user_id: currentUserId,
+            reply_count: 0,
         };
+    },
+);
+
+export const getCurrentSearchForSearchTeam: (state: GlobalState) => Record<string, any> = createSelector(
+    'getCurrentSearchForSearchTeam',
+    (state: GlobalState) => state.entities.search.current,
+    getSearchTeam,
+    (current, teamId) => {
+        return current[teamId || 'ALL_TEAMS'];
     },
 );
 
@@ -105,12 +133,21 @@ export function getSearchTerms(state: GlobalState): string {
     return state.views.rhs.searchTerms;
 }
 
+// getSearchTeam returns the team ID that the search is currently scoped to, or the current team if no team was specified.
+export function getSearchTeam(state: GlobalState): string {
+    return state.views.rhs.searchTeam ?? getCurrentTeamId(state);
+}
+
 export function getSearchType(state: GlobalState): SearchType {
     return state.views.rhs.searchType;
 }
 
 export function getSearchResultsTerms(state: GlobalState): string {
     return state.views.rhs.searchResultsTerms;
+}
+
+export function getSearchResultsType(state: GlobalState): string {
+    return state.views.rhs.searchResultsType;
 }
 
 export function getIsSearchingTerm(state: GlobalState): boolean {
@@ -130,10 +167,22 @@ export function getIsSearchGettingMore(state: GlobalState): boolean {
 }
 
 export function makeGetChannelDraft() {
-    const defaultDraft = Object.freeze({message: '', fileInfos: [], uploadsInProgress: [], createAt: 0, updateAt: 0, channelId: '', rootId: ''});
+    const defaultDraft = Object.freeze({
+        message: '',
+        fileInfos: [],
+        uploadsInProgress: [],
+        createAt: 0,
+        updateAt: 0,
+        channelId: '',
+        rootId: '',
+    });
     const getDraft = makeGetGlobalItemWithDefault(defaultDraft);
 
-    return (state: GlobalState, channelId: string): PostDraft => {
+    return (state: GlobalState, channelId?: string): PostDraft => {
+        if (!channelId) {
+            return defaultDraft;
+        }
+
         const draft = getDraft(state, StoragePrefixes.DRAFT + channelId);
         if (
             typeof draft.message !== 'undefined' &&
@@ -148,7 +197,15 @@ export function makeGetChannelDraft() {
 }
 
 export function getPostDraft(state: GlobalState, prefixId: string, suffixId: string): PostDraft {
-    const defaultDraft = {message: '', fileInfos: [], uploadsInProgress: [], createAt: 0, updateAt: 0, channelId: '', rootId: ''};
+    const defaultDraft = {
+        message: '',
+        fileInfos: [],
+        uploadsInProgress: [],
+        createAt: 0,
+        updateAt: 0,
+        channelId: '',
+        rootId: '',
+    };
 
     if (prefixId === StoragePrefixes.COMMENT_DRAFT) {
         defaultDraft.rootId = suffixId;
@@ -164,10 +221,6 @@ export function getPostDraft(state: GlobalState, prefixId: string, suffixId: str
     }
 
     return defaultDraft;
-}
-
-export function getIsRhsSuppressed(state: GlobalState): boolean {
-    return state.views.rhsSuppressed;
 }
 
 export function getIsRhsOpen(state: GlobalState): boolean {

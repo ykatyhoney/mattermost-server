@@ -7,17 +7,17 @@ import {useDispatch, useSelector} from 'react-redux';
 import Flex from '@mattermost/compass-components/utilities/layout/Flex'; // eslint-disable-line no-restricted-imports
 
 import {closeRightHandSide, showMentions} from 'actions/views/rhs';
-import Search from 'components/search';
-
 import {getRhsState} from 'selectors/rhs';
 
-import {GlobalState} from 'types/store';
+import NewSearch from 'components/new_search/new_search';
 
 import {
     Constants,
     RHSStates,
 } from 'utils/constants';
 import * as Keyboard from 'utils/keyboard';
+
+import type {GlobalState} from 'types/store';
 
 const GlobalSearchNav = (): JSX.Element => {
     const dispatch = useDispatch();
@@ -50,9 +50,7 @@ const GlobalSearchNav = (): JSX.Element => {
             flex={1}
             alignment='center'
         >
-            <Search
-                enableFindShortcut={true}
-            />
+            <NewSearch/>
         </Flex>
     );
 };

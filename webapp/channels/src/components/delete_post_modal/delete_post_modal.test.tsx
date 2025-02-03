@@ -1,15 +1,15 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React from 'react';
 import {shallow} from 'enzyme';
+import React from 'react';
 import {Modal} from 'react-bootstrap';
 
-import {PostType, PostMetadata} from '@mattermost/types/posts';
-
-import {getHistory} from 'utils/browser_history';
+import type {PostType, PostMetadata} from '@mattermost/types/posts';
 
 import DeletePostModal from 'components/delete_post_modal/delete_post_modal';
+
+import {getHistory} from 'utils/browser_history';
 
 describe('components/delete_post_modal', () => {
     const post = {
@@ -30,6 +30,7 @@ describe('components/delete_post_modal', () => {
         pending_post_id: '',
         reply_count: 0,
         metadata: {} as PostMetadata,
+        remote_id: '',
     };
 
     const baseProps = {
@@ -197,5 +198,22 @@ describe('components/delete_post_modal', () => {
             modalProps.onExited(document.createElement('div'));
         }
         expect(baseProps.onExited).toHaveBeenCalledTimes(1);
+    });
+
+    test('should warn about remote post deletion', () => {
+        const props = {
+            ...baseProps,
+            post: {
+                ...post,
+                remote_id: 'remoteclusterid1',
+            },
+        };
+
+        const wrapper = shallow<DeletePostModal>(
+            <DeletePostModal {...props}/>,
+        );
+
+        expect(wrapper.find('SharedChannelPostDeleteWarning')).toBeDefined();
+        console.log(wrapper.find('SharedChannelPostDeleteWarning').debug());
     });
 });

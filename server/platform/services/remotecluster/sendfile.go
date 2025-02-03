@@ -13,9 +13,9 @@ import (
 	"path"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/filestore"
-	"github.com/mattermost/mattermost-server/v6/server/platform/shared/mlog"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/shared/mlog"
+	"github.com/mattermost/mattermost/server/v8/platform/shared/filestore"
 )
 
 type SendFileResultFunc func(us *model.UploadSession, rc *model.RemoteCluster, resp *Response, err error)
@@ -82,6 +82,13 @@ func (rcs *Service) sendFile(task sendFileTask) {
 }
 
 func (rcs *Service) sendFileToRemote(timeout time.Duration, task sendFileTask) (*model.FileInfo, error) {
+	start := time.Now()
+	defer func() {
+		if metrics := rcs.server.GetMetrics(); metrics != nil {
+			metrics.ObserveSharedChannelsSyncSendStepDuration(task.rc.RemoteId, "Attachments", time.Since(start).Seconds())
+		}
+	}()
+
 	rcs.server.Log().Log(mlog.LvlRemoteClusterServiceDebug, "sending file to remote...",
 		mlog.String("remote", task.rc.DisplayName),
 		mlog.String("uploadId", task.us.Id),

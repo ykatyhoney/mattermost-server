@@ -1,9 +1,12 @@
-@import 'utils/mixins';
+@use 'utils/mixins';
 
 .Plugins__marketplace {
     margin-top: 24px;
 }
 
+.plugins-skip-btn {
+    margin-left: 8px;
+}
 // preempt cards wrapping
 @media screen and (max-width: 900px) {
     .Plugins-body {
@@ -49,4 +52,4 @@
     }
 }
 
-@include simple-in-and-out("Plugins");
+@include mixins.simple-in-and-out("Plugins");
